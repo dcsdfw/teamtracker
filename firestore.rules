@@ -1,0 +1,26 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Time entries - allow read/write for all (since we're using simple cleaner IDs)
+    // In production, you should implement proper authentication
+    match /logs/{document} {
+      allow read, write: if true;
+    }
+    
+    // Facilities - allow read for all, write for all (manager functionality)
+    match /facilities/{document} {
+      allow read, write: if true;
+    }
+    
+    // Schedule entries - allow read for all, write for all (manager functionality)
+    match /schedule/{document} {
+      allow read, write: if true;
+    }
+    
+    // Cleaners - allow read for all, write for all
+    match /cleaners/{document} {
+      allow read, write: if true;
+    }
+  }
+}
