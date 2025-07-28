@@ -1,6 +1,6 @@
 # Time Tracker App
 
-A React-based time tracking application for cleaning teams with Firebase backend.
+A React-based time tracking application for cleaning teams with Firebase backend and modern UI design.
 
 ## 🚀 Features
 
@@ -8,8 +8,9 @@ A React-based time tracking application for cleaning teams with Firebase backend
 - **Facility Management**: Multiple facility support with dropdown selection
 - **Manager Interface**: View all time entries and manage facilities
 - **Offline Support**: Firebase Firestore with offline persistence
-- **Mobile-Friendly**: Responsive design for mobile devices
+- **Mobile-Friendly**: Responsive design with modern UI components
 - **Navigation**: Hamburger menu for easy navigation
+- **Modern Design**: Beautiful UI using Tailwind CSS and Shadcn/UI components
 
 ## 🔧 Setup
 
@@ -116,18 +117,37 @@ firebase deploy
 
 ```
 src/
-├── App.tsx                 # Main application component
-├── App.css                 # Main styles
+├── App.tsx                 # Main application component with routing
+├── index.css               # Global styles and design system
 ├── firebase.ts             # Firebase configuration
 ├── firestoreService.ts     # Firebase service layer
-├── useTimer.ts             # Timer hook
-├── CleanerLogin.tsx        # Login component
+
+├── main.tsx                # Application entry point
+├── pages/
+│   ├── Index.tsx           # Main page component
+│   └── NotFound.tsx        # 404 page
 ├── components/
-│   ├── ManagerInterface.tsx # Manager interface
-│   ├── StartButton.tsx     # Start button component
-│   ├── StopButton.tsx      # Stop button component
-│   └── NotesBox.tsx        # Notes input component
+│   ├── Timer.tsx           # Timer component
+│   ├── FacilitySelector.tsx # Facility selection dropdown
+│   ├── TimeEntries.tsx     # Time entries display
+│   ├── Navigation.tsx      # Hamburger menu navigation
+│   ├── CleanerLogin.tsx    # Login component
+│   ├── ManagerLogin.tsx    # Manager login component
+│   ├── ManagerInterface.tsx # Manager dashboard
+│   └── ui/                 # Shadcn/UI components
+├── hooks/
+│   └── use-toast.ts        # Toast notification hook
+└── lib/
+    └── utils.ts            # Utility functions
 ```
+
+## 🎨 Design System
+
+The app uses a modern design system built with:
+- **Tailwind CSS**: Utility-first CSS framework
+- **Shadcn/UI**: High-quality React components
+- **Lucide React**: Beautiful icons
+- **Custom Design Tokens**: HSL color system with dark mode support
 
 ## ⚠️ Important Notes
 

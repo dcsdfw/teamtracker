@@ -4,10 +4,7 @@ import {
   getDocs, 
   query, 
   where, 
-  doc, 
-  updateDoc, 
-  deleteDoc,
-  orderBy,
+  
   limit
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -56,7 +53,6 @@ class FirestoreService {
     } as TimeEntry;
     
     const docRef = await addDoc(collection(db, "logs"), timeEntry);
-    console.log('Time entry added with ID:', docRef.id);
     return { success: true, id: docRef.id };
   }
 
@@ -67,23 +63,28 @@ class FirestoreService {
       q = query(
         collection(db, "logs"),
         where("cleanerId", "==", cleanerId),
-        orderBy("createdAt", "desc"),
         limit(100)
       );
     } else {
       // Get all time entries for manager view
       q = query(
         collection(db, "logs"),
-        orderBy("createdAt", "desc"),
         limit(100)
       );
     }
     
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const entries = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    }));
+    })) as any[];
+    
+    // Sort in memory instead of using Firestore orderBy to avoid index requirements
+    return entries.sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime(); // Descending order
+    });
   }
 
   // Facilities
