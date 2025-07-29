@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Timer } from '@/components/Timer';
 import { FacilitySelector } from '@/components/FacilitySelector';
 import { TimeEntries } from '@/components/TimeEntries';
@@ -34,8 +35,17 @@ interface Facility {
 
 
 export default function Index() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [cleanerId, setCleanerId] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'timer' | 'manager' | 'calendar'>('timer');
+  // Determine current view from URL path
+  const getCurrentView = (): 'timer' | 'manager' | 'calendar' => {
+    const path = location.pathname;
+    if (path === '/manager') return 'manager';
+    if (path === '/calendar') return 'calendar';
+    return 'timer'; // Default to timer for '/' and '/timer'
+  };
+  const currentView = getCurrentView();
   const [showManagerLogin, setShowManagerLogin] = useState(false);
   const [selectedFacility, setSelectedFacility] = useState('');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -134,7 +144,7 @@ export default function Index() {
     localStorage.removeItem('cleanerId');
     localStorage.removeItem('teamtracker-manager-auth');
     setCleanerId(null);
-    setCurrentView('timer');
+    navigate('/timer');
     setSelectedFacility('');
   };
 
@@ -149,7 +159,7 @@ export default function Index() {
   const handleManagerLogin = () => {
     setShowManagerLogin(false);
     setCleanerId('MANAGER'); // Set cleanerId to MANAGER for manager access
-    setCurrentView('manager');
+    navigate('/manager');
     toast({
       title: "Manager Access Granted",
       description: "Welcome to the Manager Dashboard",
@@ -168,7 +178,17 @@ export default function Index() {
         return;
       }
     }
-    setCurrentView(view);
+    switch (view) {
+      case 'timer':
+        navigate('/timer');
+        break;
+      case 'manager':
+        navigate('/manager');
+        break;
+      case 'calendar':
+        navigate('/calendar');
+        break;
+    }
   };
 
   const handleTimeEntry = async (entry: Omit<TimeEntry, 'id' | 'cleanerId' | 'createdAt'>) => {
@@ -319,7 +339,7 @@ export default function Index() {
           <CalendarView isManager={cleanerId === 'MANAGER'} currentUserId={cleanerId} />
         ) : (
           // Manager Interface - using the original working component
-          <ManagerInterface onBack={() => setCurrentView('timer')} />
+          <ManagerInterface onBack={() => navigate('/timer')} />
         )}
       </div>
     </div>
