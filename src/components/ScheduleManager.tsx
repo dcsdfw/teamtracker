@@ -486,18 +486,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
                 </div>
               )}
 
-              <div className="mt-3">
-                <Label htmlFor="endDate">End Date (Optional)</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={recurringData.endDate}
-                  onChange={(e) => setRecurringData(prev => ({ ...prev, endDate: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Leave empty to create entries for 1 year
-                </p>
-              </div>
+
             </div>
 
             <div className="flex gap-2">
