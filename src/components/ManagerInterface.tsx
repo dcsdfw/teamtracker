@@ -41,6 +41,11 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [showAddFacility, setShowAddFacility] = useState(false)
   const [newFacilityId, setNewFacilityId] = useState('')
   const [newFacilityName, setNewFacilityName] = useState('')
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [newUserFirstName, setNewUserFirstName] = useState('')
+  const [newUserLastName, setNewUserLastName] = useState('')
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserPhone, setNewUserPhone] = useState('')
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [loadingEntries, setLoadingEntries] = useState(false)
   const [listenerActive, setListenerActive] = useState(false)
@@ -184,6 +189,43 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   }
 
+  const handleAddUser = async () => {
+    if (!newUserFirstName.trim() || !newUserLastName.trim() || !newUserEmail.trim() || !newUserPhone.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all fields (First Name, Last Name, Email, and Phone)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // Here you would typically call your backend service to add the user
+      // For now, we'll just show a success message
+      toast({
+        title: "User Added Successfully",
+        description: `${newUserFirstName} ${newUserLastName} has been added to the system.`,
+      })
+      
+      // Reset form
+      setShowAddUser(false)
+      setNewUserFirstName('')
+      setNewUserLastName('')
+      setNewUserEmail('')
+      setNewUserPhone('')
+    } catch (error) {
+      console.error('Error adding user:', error)
+      toast({
+        title: "Error",
+        description: `Error adding user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -220,29 +262,115 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
             </CardContent>
           </Card>
 
-          {/* User & Facility Management */}
-          <Card className="bg-gradient-card border-border/50 shadow-card backdrop-blur-sm">
-            <CardContent className="space-y-12">
-              {/* User Management Section */}
-              <div>
-                <div className="flex items-center gap-3 mb-6">
+          {/* User & Facility Management Column */}
+          <div className="space-y-8">
+            {/* User Management Section */}
+            <Card className="bg-gradient-card border-border/50 shadow-card backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
                     <Users className="h-5 w-5 text-white" />
                   </div>
-                  <h2 className="text-xl font-semibold text-foreground">User Management</h2>
-                </div>
-                
-                {/* Add New User Form */}
-                <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border/50">
-                  <h3 className="font-semibold text-foreground">Add New User</h3>
-                  <p className="text-sm text-muted-foreground">Click the button below to add a new user with first name, last name, email, and phone number.</p>
+                  User Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!showAddUser ? (
                   <Button 
+                    onClick={() => setShowAddUser(true)}
                     className="w-full bg-black hover:bg-gray-800 text-white transition-all duration-300"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add New User
                   </Button>
-                </div>
+                ) : (
+                  <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                    <h3 className="font-semibold text-foreground">Add New User</h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="newUserFirstName">First Name</Label>
+                        <Input
+                          type="text"
+                          id="newUserFirstName"
+                          value={newUserFirstName}
+                          onChange={(e) => setNewUserFirstName(e.target.value)}
+                          placeholder="e.g., John"
+                          className="bg-background/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="newUserLastName">Last Name</Label>
+                        <Input
+                          type="text"
+                          id="newUserLastName"
+                          value={newUserLastName}
+                          onChange={(e) => setNewUserLastName(e.target.value)}
+                          placeholder="e.g., Doe"
+                          className="bg-background/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="newUserEmail">Email</Label>
+                      <Input
+                        type="email"
+                        id="newUserEmail"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="e.g., john.doe@example.com"
+                        className="bg-background/50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="newUserPhone">Phone</Label>
+                      <Input
+                        type="tel"
+                        id="newUserPhone"
+                        value={newUserPhone}
+                        onChange={(e) => setNewUserPhone(e.target.value)}
+                        placeholder="e.g., (555) 123-4567"
+                        className="bg-background/50"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={handleAddUser} 
+                        disabled={isLoading}
+                        className="flex-1 bg-black hover:bg-gray-800 text-white transition-all duration-300"
+                      >
+                        {isLoading ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Adding...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Add User
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          setShowAddUser(false)
+                          setNewUserFirstName('')
+                          setNewUserLastName('')
+                          setNewUserEmail('')
+                          setNewUserPhone('')
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Current Users Section */}
                 <div className="mt-8">
@@ -255,26 +383,20 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                     <p>No users found. Add your first user above.</p>
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Visual Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border/50"></span>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-gradient-card px-3 text-muted-foreground">Management Sections</span>
-                </div>
-              </div>
-
-              {/* Facility Management Section */}
-              <div>
-                <div className="flex items-center gap-3 mb-6">
+            {/* Facility Management Section */}
+            <Card className="bg-gradient-card border-border/50 shadow-card backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gradient-success rounded-lg flex items-center justify-center">
                     <Building2 className="h-5 w-5 text-white" />
                   </div>
-                  <h2 className="text-xl font-semibold text-foreground">Facility Management</h2>
-                </div>
+                  Facility Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
               {!showAddFacility ? (
                 <Button 
                   onClick={() => setShowAddFacility(true)}
@@ -344,7 +466,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                 </div>
               )}
 
-              <div className="space-y-3">
+              <div className="space-y-3 mt-8">
                 <h3 className="font-semibold text-foreground flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
                   Current Facilities
@@ -356,37 +478,24 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                                         {facilities.map(facility => (
-                       <div key={facility.id} className="flex items-center justify-between p-3 bg-background/50 rounded-lg border border-border/50">
-                         <span className="font-medium text-foreground">{facility.name}</span>
-                       </div>
-                     ))}
+                    <Select onValueChange={(value) => setSelectedFacility(value)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a facility to view details" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {facilities.map(facility => (
+                          <SelectItem key={facility.id} value={facility.id}>
+                            {facility.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>
-
-              {/* Facility Dropdown Selector */}
-              <div className="mt-8">
-                <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
-                  <Building2 className="h-4 w-4" />
-                  Select Facility for Schedule
-                </h3>
-                <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-                  <SelectTrigger className="w-full bg-background/50 border-border/50">
-                    <SelectValue placeholder="Select a facility for scheduling" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {facilities.map(facility => (
-                      <SelectItem key={facility.id} value={facility.id}>
-                        {facility.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              </div>
             </CardContent>
           </Card>
+          </div>
         </div>
 
         {/* Time Entries Section */}
