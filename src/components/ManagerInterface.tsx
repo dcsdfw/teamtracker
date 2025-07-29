@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle, Pencil } from 'lucide-react'
 import { ScheduleManager } from './ScheduleManager'
 
 interface ManagerInterfaceProps {
@@ -49,10 +49,23 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [loadingEntries, setLoadingEntries] = useState(false)
   const [listenerActive, setListenerActive] = useState(false)
+  const [users, setUsers] = useState<Array<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean }>>([])
+  const [editingUser, setEditingUser] = useState<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean } | null>(null)
+  const [editUserFirstName, setEditUserFirstName] = useState('')
+  const [editUserLastName, setEditUserLastName] = useState('')
+  const [editUserEmail, setEditUserEmail] = useState('')
+  const [editUserPhone, setEditUserPhone] = useState('')
+  
+  // Facility editing state
+  const [editingFacility, setEditingFacility] = useState<{ id: string; name: string } | null>(null)
+  const [editFacilityId, setEditFacilityId] = useState('')
+  const [editFacilityName, setEditFacilityName] = useState('')
+
   const { toast } = useToast()
 
   useEffect(() => {
     loadFacilities()
+    loadUsers()
     const unsubscribe = setupTimeEntriesListener()
     // Set today's date as default
     const today = new Date().toISOString().split('T')[0]
@@ -76,6 +89,45 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       toast({
         title: "Error",
         description: `Error loading facilities: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const loadUsers = async () => {
+    try {
+      console.log('Loading users...')
+      const usersData = await firestoreService.getUsers()
+      console.log('Users loaded from users collection:', usersData)
+      
+      // If no users in users collection, try to get from logs collection
+      if (usersData.length === 0) {
+        console.log('No users in users collection, checking logs collection...')
+        const existingUserIds = await firestoreService.getExistingUserIds()
+        console.log('Existing user IDs from logs:', existingUserIds)
+        
+        // Create user objects from the IDs found in logs
+        const usersFromLogs = existingUserIds.map(id => ({
+          id: id,
+          username: id,
+          firstName: id.split('.')[0] || id,
+          lastName: id.split('.')[1] || '',
+          email: '',
+          phone: '',
+          active: true,
+          createdAt: new Date()
+        }))
+        
+        console.log('Users created from logs:', usersFromLogs)
+        setUsers(usersFromLogs)
+      } else {
+        setUsers(usersData)
+      }
+    } catch (error) {
+      console.error('Error loading users:', error)
+      toast({
+        title: "Error",
+        description: `Error loading users: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       })
     }
@@ -226,6 +278,115 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   }
 
+  const handleEditUser = async () => {
+    if (!editingUser || !editUserFirstName.trim() || !editUserLastName.trim() || !editUserEmail.trim() || !editUserPhone.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all fields (First Name, Last Name, Email, and Phone)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // Update the user in the database
+      await firestoreService.updateUser(editingUser.id, {
+        firstName: editUserFirstName.trim(),
+        lastName: editUserLastName.trim(),
+        email: editUserEmail.trim(),
+        phone: editUserPhone.trim()
+      })
+      
+      // Reload users to reflect changes
+      await loadUsers()
+      
+      toast({
+        title: "User Updated Successfully",
+        description: `${editUserFirstName} ${editUserLastName} has been updated.`,
+      })
+      
+      // Reset edit form
+      setEditingUser(null)
+      setEditUserFirstName('')
+      setEditUserLastName('')
+      setEditUserEmail('')
+      setEditUserPhone('')
+    } catch (error) {
+      console.error('Error updating user:', error)
+      toast({
+        title: "Error",
+        description: `Error updating user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const startEditUser = (user: { id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean }) => {
+    setEditingUser(user)
+    setEditUserFirstName(user.firstName)
+    setEditUserLastName(user.lastName)
+    setEditUserEmail(user.email)
+    setEditUserPhone(user.phone)
+  }
+
+  const cancelEditUser = () => {
+    setEditingUser(null)
+    setEditUserFirstName('')
+    setEditUserLastName('')
+    setEditUserEmail('')
+    setEditUserPhone('')
+  }
+
+  const handleEditFacility = async () => {
+    if (!editingFacility) return;
+
+    if (!editFacilityId.trim() || !editFacilityName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in both Facility ID and Facility Name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await firestoreService.updateFacility(editingFacility.id, editFacilityName.trim());
+      toast({
+        title: "Facility Updated Successfully",
+        description: `${editFacilityName} has been updated.`,
+      });
+      loadFacilities(); // Reload facilities to reflect changes
+      setEditingFacility(null);
+      setEditFacilityId('');
+      setEditFacilityName('');
+    } catch (error) {
+      console.error('Error updating facility:', error);
+      toast({
+        title: "Error",
+        description: `Error updating facility: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startEditFacility = (facility: { id: string; name: string }) => {
+    setEditingFacility(facility);
+    setEditFacilityId(facility.id);
+    setEditFacilityName(facility.name);
+  };
+
+  const cancelEditFacility = () => {
+    setEditingFacility(null);
+    setEditFacilityId('');
+    setEditFacilityName('');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -268,7 +429,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
             <Card className="bg-gradient-card border-border/50 shadow-card backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
                     <Users className="h-5 w-5 text-white" />
                   </div>
                   User Management
@@ -376,12 +537,123 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                 <div className="mt-8">
                   <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
                     <Users className="h-4 w-4" />
-                    Current Users (0)
+                    Current Users ({users.length})
                   </h3>
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No users found. Add your first user above.</p>
-                  </div>
+                  {users.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No users found. Add your first user above.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* User Selection Dropdown */}
+                      <div className="space-y-2">
+                        <Label htmlFor="userSelect">Select User to Edit</Label>
+                        <Select onValueChange={(value) => {
+                          const selectedUser = users.find(u => u.id === value)
+                          if (selectedUser) {
+                            startEditUser(selectedUser)
+                          }
+                        }}>
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue placeholder="Choose a user to edit..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {users.map(user => (
+                              <SelectItem key={user.id} value={user.id}>
+                                <span>{user.firstName} {user.lastName}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Edit User Form */}
+                      {editingUser && (
+                        <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                          <h3 className="font-semibold text-foreground">Edit User: {editingUser.firstName} {editingUser.lastName}</h3>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="editUserFirstName">First Name</Label>
+                              <Input
+                                type="text"
+                                id="editUserFirstName"
+                                value={editUserFirstName}
+                                onChange={(e) => setEditUserFirstName(e.target.value)}
+                                placeholder="e.g., John"
+                                className="bg-background/50"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="editUserLastName">Last Name</Label>
+                              <Input
+                                type="text"
+                                id="editUserLastName"
+                                value={editUserLastName}
+                                onChange={(e) => setEditUserLastName(e.target.value)}
+                                placeholder="e.g., Doe"
+                                className="bg-background/50"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="editUserEmail">Email</Label>
+                            <Input
+                              type="email"
+                              id="editUserEmail"
+                              value={editUserEmail}
+                              onChange={(e) => setEditUserEmail(e.target.value)}
+                              placeholder="e.g., john.doe@example.com"
+                              className="bg-background/50"
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="editUserPhone">Phone</Label>
+                            <Input
+                              type="tel"
+                              id="editUserPhone"
+                              value={editUserPhone}
+                              onChange={(e) => setEditUserPhone(e.target.value)}
+                              placeholder="e.g., 555-123-4567"
+                              className="bg-background/50"
+                            />
+                          </div>
+                          
+
+                          
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={handleEditUser}
+                              disabled={isLoading}
+                              className="flex-1 bg-black hover:bg-gray-800 text-white transition-all duration-300"
+                            >
+                              {isLoading ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                  Updating...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Update User
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={cancelEditUser}
+                              variant="outline"
+                              className="flex-1"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -469,7 +741,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
               <div className="space-y-3 mt-8">
                 <h3 className="font-semibold text-foreground flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
-                  Current Facilities
+                  Current Facilities ({facilities.length})
                 </h3>
                 {facilities.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -478,9 +750,15 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Select onValueChange={(value) => setSelectedFacility(value)}>
+                    <Label htmlFor="facilitySelect">Select Facility to Edit</Label>
+                    <Select onValueChange={(value) => {
+                      const selectedFacility = facilities.find(f => f.id === value)
+                      if (selectedFacility) {
+                        startEditFacility(selectedFacility)
+                      }
+                    }}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a facility to view details" />
+                        <SelectValue placeholder="Choose a facility to edit..." />
                       </SelectTrigger>
                       <SelectContent>
                         {facilities.map(facility => (
@@ -490,6 +768,64 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+
+                {/* Edit Facility Form */}
+                {editingFacility && (
+                  <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border/50 mt-4">
+                    <h3 className="font-semibold text-foreground">Edit Facility</h3>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="editFacilityId">Facility ID</Label>
+                      <Input
+                        type="text"
+                        id="editFacilityId"
+                        value={editFacilityId}
+                        onChange={(e) => setEditFacilityId(e.target.value)}
+                        placeholder="e.g., office-building-1"
+                        className="bg-background/50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editFacilityName">Facility Name</Label>
+                      <Input
+                        type="text"
+                        id="editFacilityName"
+                        value={editFacilityName}
+                        onChange={(e) => setEditFacilityName(e.target.value)}
+                        placeholder="e.g., Downtown Office Building"
+                        className="bg-background/50"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={handleEditFacility} 
+                        disabled={isLoading}
+                        className="flex-1 bg-gradient-success hover:bg-gradient-success/90 text-white transition-all duration-300"
+                      >
+                        {isLoading ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Update Facility
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={cancelEditFacility}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

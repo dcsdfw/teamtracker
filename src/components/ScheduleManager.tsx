@@ -320,7 +320,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="cleaner">Cleaners</Label>
+                <Label htmlFor="cleaner">Team Members</Label>
                 <div className="relative" ref={cleanerDropdownRef}>
                   <div 
                     className="min-h-[40px] border border-input bg-background px-3 py-2 rounded-md cursor-pointer flex items-center justify-between"
@@ -328,7 +328,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
                   >
                     <div className="flex flex-wrap gap-1 flex-1">
                       {formData.cleanerIds.length === 0 ? (
-                        <span className="text-muted-foreground">Select cleaners...</span>
+                        <span className="text-muted-foreground">Select team members...</span>
                       ) : (
                         formData.cleanerIds.map(cleanerId => {
                           const user = users.find(u => u.id === cleanerId)
