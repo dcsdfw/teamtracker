@@ -249,7 +249,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5" />
-          <h3 className="text-lg font-semibold">Schedule Management</h3>
+          <h3 className="text-lg font-semibold">Today's Date</h3>
           {selectedDate && (
             <Badge variant="secondary">
               {new Date(selectedDate).toLocaleDateString()}
@@ -510,7 +510,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
                 ) : (
                   <>
                     {editingEntry ? <Edit className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                    {editingEntry ? 'Update Entry' : 'Add Entry'}
+                    {editingEntry ? 'Update Entry' : 'Add New Entry'}
                   </>
                 )}
               </Button>

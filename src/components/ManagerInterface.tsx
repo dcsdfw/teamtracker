@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle, Pencil } from 'lucide-react'
+import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle, Pencil, Trash2 } from 'lucide-react'
 import { ScheduleManager } from './ScheduleManager'
 
 interface ManagerInterfaceProps {
@@ -387,11 +387,28 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     setEditFacilityName('');
   };
 
+  const handleDeleteTimeEntry = async (entryId: string, facilityName: string) => {
+    try {
+      await firestoreService.deleteTimeEntry(entryId);
+      toast({
+        title: "Entry Deleted",
+        description: `Time entry for ${facilityName} has been removed.`,
+      });
+    } catch (error) {
+      console.error('Error deleting time entry:', error);
+      toast({
+        title: "Error",
+        description: `Failed to delete time entry: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center gap-4 mb-8">
+        <div className="mb-6 ml-4">
           <Button
             onClick={onBack}
             variant="ghost"
@@ -399,12 +416,12 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
             className="hover:bg-primary/10 hover:text-primary transition-all duration-300"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Timer
+            Back
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Manager Dashboard</h1>
-            <p className="text-muted-foreground">Schedule and facility management</p>
-          </div>
+        </div>
+        
+        <div className="mb-8 ml-4">
+          <h1 className="text-3xl font-bold text-foreground">Manager Dashboard</h1>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
@@ -898,15 +915,15 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                   const facility = facilities.find(f => f.id === entry.facilityId)
                   
                   return (
-                                           <div key={entry.id} className="p-4 bg-background/50 rounded-lg border border-border/50 hover:shadow-card transition-all duration-300">
-                         <div className="flex items-start justify-between mb-3">
-                           <div className="flex items-center gap-2">
-                             <Users className="h-4 w-4 text-primary" />
-                             <span className="font-semibold text-foreground">{entry.cleanerId}</span>
-                             <span className="text-muted-foreground">•</span>
-                             <Building2 className="h-4 w-4 text-success" />
-                             <span className="font-medium text-foreground">{facility?.name || 'Unknown Facility'}</span>
-                           </div>
+                    <div key={entry.id} className="p-4 bg-background/50 rounded-lg border border-border/50 hover:shadow-card transition-all duration-300 group">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-foreground">{entry.cleanerId}</span>
+                          <span className="text-muted-foreground">•</span>
+                          <Building2 className="h-4 w-4 text-success" />
+                          <span className="font-medium text-foreground">{facility?.name || 'Unknown Facility'}</span>
+                        </div>
                         <Badge variant="outline" className="text-xs">
                           {(() => {
                             const totalSeconds = entry.durationMinutes; // Duration is already in seconds
@@ -918,7 +935,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         </Badge>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground mb-3">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-3 w-3" />
                           <span>{startDate.toLocaleDateString()}</span>
@@ -926,6 +943,16 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         <div className="flex items-center gap-2">
                           <Clock className="h-3 w-3" />
                           <span>{startDate.toLocaleTimeString()} - {endDate.toLocaleTimeString()}</span>
+                        </div>
+                        <div className="flex justify-center" style={{ width: '60px' }}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteTimeEntry(entry.id, facility?.name || 'Unknown Facility')}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                       
