@@ -7,23 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle } from 'lucide-react'
+import { ScheduleManager } from './ScheduleManager'
 
 interface ManagerInterfaceProps {
   onBack: () => void
 }
 
-interface ScheduleEntry {
-  date: string
-  cleanerId: string
-  facilityId: string
-  startTime?: string
-  endTime?: string
-  notes?: string
-}
+
 
 interface TimeEntry {
   id: string
@@ -38,15 +32,12 @@ interface TimeEntry {
 
 export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [facilities, setFacilities] = useState<Array<{ id: string; name: string }>>([])
-  const [cleaners] = useState<string[]>(['C001', 'C002', 'C003', 'C004', 'C005'])
+
   const [isLoading, setIsLoading] = useState(false)
 
   const [selectedDate, setSelectedDate] = useState<string>('')
-  const [selectedCleaner, setSelectedCleaner] = useState<string>('')
+
   const [selectedFacility, setSelectedFacility] = useState<string>('')
-  const [startTime, setStartTime] = useState<string>('')
-  const [endTime, setEndTime] = useState<string>('')
-  const [notes, setNotes] = useState<string>('')
   const [showAddFacility, setShowAddFacility] = useState(false)
   const [newFacilityId, setNewFacilityId] = useState('')
   const [newFacilityName, setNewFacilityName] = useState('')
@@ -141,51 +132,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   }
 
-  const handleAddSchedule = async () => {
-    if (!selectedDate || !selectedCleaner || !selectedFacility) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields (Date, Cleaner, Facility)",
-        variant: "destructive",
-      })
-      return
-    }
 
-    setIsLoading(true)
-
-    try {
-      const scheduleEntry: ScheduleEntry = {
-        date: selectedDate,
-        cleanerId: selectedCleaner,
-        facilityId: selectedFacility,
-        startTime: startTime || undefined,
-        endTime: endTime || undefined,
-        notes: notes || undefined
-      }
-
-      await firestoreService.addScheduleEntry(scheduleEntry)
-      toast({
-        title: "Success",
-        description: "Schedule entry added successfully!",
-      })
-      
-      // Clear form
-      setSelectedCleaner('')
-      setSelectedFacility('')
-      setStartTime('')
-      setEndTime('')
-      setNotes('')
-    } catch (error) {
-      console.error('Error adding schedule:', error)
-      toast({
-        title: "Error",
-        description: `Error adding schedule: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleAddFacility = async () => {
     if (!newFacilityId.trim() || !newFacilityName.trim()) {
@@ -265,116 +212,69 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                 <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
                   <Calendar className="h-5 w-5 text-white" />
                 </div>
-                Add Schedule Entry
+                Schedule Management
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input
-                    type="date"
-                    id="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-background/50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cleaner">Cleaner</Label>
-                  <Select value={selectedCleaner} onValueChange={setSelectedCleaner}>
-                    <SelectTrigger className="bg-background/50">
-                      <SelectValue placeholder="Select Cleaner" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cleaners.map(cleaner => (
-                        <SelectItem key={cleaner} value={cleaner}>{cleaner}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="facility">Facility</Label>
-                <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Select Facility" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {facilities.map(facility => (
-                      <SelectItem key={facility.id} value={facility.id}>{facility.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startTime">Start Time (optional)</Label>
-                  <Input
-                    type="time"
-                    id="startTime"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="bg-background/50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endTime">End Time (optional)</Label>
-                  <Input
-                    type="time"
-                    id="endTime"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="bg-background/50"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes (optional)</Label>
-                                  <Textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
-                    placeholder="Add notes about the schedule..."
-                    className="bg-background/50 resize-none"
-                    rows={3}
-                  />
-              </div>
-
-              <Button 
-                onClick={handleAddSchedule} 
-                disabled={isLoading}
-                className="w-full bg-gradient-primary hover:bg-gradient-primary/90 text-white transition-all duration-300"
-              >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Adding...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Schedule Entry
-                  </>
-                )}
-              </Button>
+            <CardContent>
+              <ScheduleManager selectedDate={selectedDate} />
             </CardContent>
           </Card>
 
-          {/* Facility Management Section */}
+          {/* User & Facility Management */}
           <Card className="bg-gradient-card border-border/50 shadow-card backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-success rounded-lg flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-white" />
+            <CardContent className="space-y-12">
+              {/* User Management Section */}
+              <div>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-foreground">User Management</h2>
                 </div>
-                Facility Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+                
+                {/* Add New User Form */}
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                  <h3 className="font-semibold text-foreground">Add New User</h3>
+                  <p className="text-sm text-muted-foreground">Click the button below to add a new user with first name, last name, email, and phone number.</p>
+                  <Button 
+                    className="w-full bg-black hover:bg-gray-800 text-white transition-all duration-300"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add New User
+                  </Button>
+                </div>
+
+                {/* Current Users Section */}
+                <div className="mt-8">
+                  <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
+                    <Users className="h-4 w-4" />
+                    Current Users (0)
+                  </h3>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>No users found. Add your first user above.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visual Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/50"></span>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-gradient-card px-3 text-muted-foreground">Management Sections</span>
+                </div>
+              </div>
+
+              {/* Facility Management Section */}
+              <div>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 bg-gradient-success rounded-lg flex items-center justify-center">
+                    <Building2 className="h-5 w-5 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-foreground">Facility Management</h2>
+                </div>
               {!showAddFacility ? (
                 <Button 
                   onClick={() => setShowAddFacility(true)}
@@ -463,6 +363,27 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                      ))}
                   </div>
                 )}
+              </div>
+
+              {/* Facility Dropdown Selector */}
+              <div className="mt-8">
+                <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
+                  <Building2 className="h-4 w-4" />
+                  Select Facility for Schedule
+                </h3>
+                <Select value={selectedFacility} onValueChange={setSelectedFacility}>
+                  <SelectTrigger className="w-full bg-background/50 border-border/50">
+                    <SelectValue placeholder="Select a facility for scheduling" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {facilities.map(facility => (
+                      <SelectItem key={facility.id} value={facility.id}>
+                        {facility.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               </div>
             </CardContent>
           </Card>

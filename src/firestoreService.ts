@@ -4,7 +4,10 @@ import {
   getDocs, 
   query, 
   where, 
-  
+  doc,
+  updateDoc,
+  setDoc,
+  deleteDoc,
   limit
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -27,7 +30,7 @@ export interface Facility {
 
 export interface ScheduleEntry {
   date: string; // YYYY-MM-DD
-  cleanerId: string;
+  cleanerIds: string[]; // Changed from cleanerId to cleanerIds array
   facilityId: string;
   startTime?: string;
   endTime?: string;
@@ -39,21 +42,41 @@ export interface Cleaner {
   active: boolean;
 }
 
+export interface User {
+  id: string;
+  username: string; // Auto-generated from first.lastname
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  active: boolean;
+  createdAt: Date;
+}
+
 class FirestoreService {
   // Time Entries
   async addTimeEntry(entry: Omit<TimeEntry, 'createdAt'>) {
-    // Filter out undefined values before saving to Firestore
-    const cleanEntry = Object.fromEntries(
-      Object.entries(entry).filter(([_, value]) => value !== undefined)
-    );
-    
-    const timeEntry: TimeEntry = {
-      ...cleanEntry,
-      createdAt: new Date()
-    } as TimeEntry;
-    
-    const docRef = await addDoc(collection(db, "logs"), timeEntry);
-    return { success: true, id: docRef.id };
+    try {
+      const timeEntryRef = doc(collection(db, "logs"));
+      const timeEntry: TimeEntry = {
+        ...entry,
+        createdAt: new Date()
+      };
+      await setDoc(timeEntryRef, timeEntry);
+      return { success: true, message: 'Time entry added successfully' };
+    } catch (error) {
+      throw new Error(`Failed to add time entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteTimeEntry(entryId: string) {
+    try {
+      const timeEntryRef = doc(db, "logs", entryId);
+      await deleteDoc(timeEntryRef);
+      return { success: true, message: 'Time entry deleted successfully' };
+    } catch (error) {
+      throw new Error(`Failed to delete time entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   async getTimeEntries(cleanerId?: string) {
@@ -110,6 +133,19 @@ class FirestoreService {
     return { success: true, message: 'Facility added successfully' };
   }
 
+  async updateFacility(facilityId: string, newName: string) {
+    try {
+      const facilityRef = doc(db, "facilities", facilityId);
+      await updateDoc(facilityRef, {
+        name: newName
+      });
+      
+      return { success: true, message: 'Facility updated successfully' };
+    } catch (error) {
+      throw new Error(`Failed to update facility: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Schedule
   async getSchedule(date: string): Promise<ScheduleEntry[]> {
     const q = query(
@@ -134,6 +170,99 @@ class FirestoreService {
     return { success: true, id: docRef.id };
   }
 
+  async updateScheduleEntry(entryId: string, updates: Partial<ScheduleEntry>) {
+    try {
+      const scheduleEntryRef = doc(db, "schedule", entryId);
+      await updateDoc(scheduleEntryRef, updates);
+      return { success: true, message: 'Schedule entry updated successfully' };
+    } catch (error) {
+      throw new Error(`Failed to update schedule entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteScheduleEntry(entryId: string) {
+    try {
+      const scheduleEntryRef = doc(db, "schedule", entryId);
+      await deleteDoc(scheduleEntryRef);
+      return { success: true, message: 'Schedule entry deleted successfully' };
+    } catch (error) {
+      throw new Error(`Failed to delete schedule entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async addRecurringSchedule(entry: ScheduleEntry, recurrence: {
+    type: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
+    daysOfWeek?: number[]; // 0-6 (Sunday-Saturday)
+    interval?: number; // Every X days/weeks/months
+    endDate?: string; // YYYY-MM-DD
+  }) {
+    try {
+      const entries: ScheduleEntry[] = [];
+      const startDate = new Date(entry.date);
+      const endDate = recurrence.endDate ? new Date(recurrence.endDate) : new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate());
+      
+      let currentDate = new Date(startDate);
+      
+      while (currentDate <= endDate) {
+        let shouldAdd = false;
+        
+        switch (recurrence.type) {
+          case 'daily':
+            shouldAdd = true;
+            break;
+          case 'weekly':
+            if (recurrence.daysOfWeek?.includes(currentDate.getDay())) {
+              shouldAdd = true;
+            }
+            break;
+          case 'monthly':
+            if (currentDate.getDate() === startDate.getDate()) {
+              shouldAdd = true;
+            }
+            break;
+          case 'bi-weekly':
+            if (recurrence.daysOfWeek?.includes(currentDate.getDay())) {
+              shouldAdd = true;
+            }
+            break;
+        }
+        
+        if (shouldAdd) {
+          const dateStr = currentDate.toISOString().split('T')[0];
+          entries.push({
+            ...entry,
+            date: dateStr
+          });
+        }
+        
+        // Move to next date based on interval
+        const interval = recurrence.interval || 1;
+        switch (recurrence.type) {
+          case 'daily':
+            currentDate.setDate(currentDate.getDate() + interval);
+            break;
+          case 'weekly':
+            currentDate.setDate(currentDate.getDate() + 1);
+            break;
+          case 'monthly':
+            currentDate.setMonth(currentDate.getMonth() + interval);
+            break;
+          case 'bi-weekly':
+            currentDate.setDate(currentDate.getDate() + interval);
+            break;
+        }
+      }
+      
+      // Add all entries to Firestore
+      const addPromises = entries.map(entry => this.addScheduleEntry(entry));
+      await Promise.all(addPromises);
+      
+      return { success: true, message: `Created ${entries.length} recurring schedule entries` };
+    } catch (error) {
+      throw new Error(`Failed to create recurring schedule: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Cleaners
   async getActiveCleaner(cleanerId: string): Promise<Cleaner | null> {
     const q = query(
@@ -152,6 +281,135 @@ class FirestoreService {
       active: data.active || false
     };
   }
+
+  // Users
+  async getUsers(): Promise<User[]> {
+    const snapshot = await getDocs(collection(db, "users"));
+    const users: User[] = [];
+    
+    for (const docSnapshot of snapshot.docs) {
+      const data = docSnapshot.data();
+      const currentDocId = docSnapshot.id;
+      
+      // If this is an old user without proper structure, automatically migrate it
+      if (!data.username && (data.name || data.id)) {
+        const oldId = data.id || data.name;
+        const newUsername = oldId.toLowerCase().replace(/\s+/g, '');
+        
+        // Create new user with proper structure
+        const newUserRef = doc(db, "users", newUsername);
+        await setDoc(newUserRef, {
+          id: newUsername,
+          username: newUsername,
+          firstName: data.firstName || oldId,
+          lastName: data.lastName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          active: data.active || true,
+          createdAt: data.createdAt || new Date()
+        });
+        
+        // Delete the old document if it's different
+        if (currentDocId !== newUsername) {
+          await deleteDoc(docSnapshot.ref);
+        }
+        
+        // Add the migrated user to our results
+        users.push({
+          id: newUsername,
+          username: newUsername,
+          firstName: data.firstName || oldId,
+          lastName: data.lastName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          active: data.active || true,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+        });
+      } else {
+        // User already has proper structure
+        users.push({
+          id: data.username || docSnapshot.id,
+          username: data.username || data.name || 'Unknown',
+          firstName: data.firstName || 'Unknown',
+          lastName: data.lastName || 'Unknown',
+          email: data.email || '',
+          phone: data.phone || '',
+          active: data.active || true,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+        });
+      }
+    }
+    
+    return users;
+  }
+
+  async updateUser(username: string, updates: { firstName?: string; lastName?: string; email?: string; phone?: string; active?: boolean }) {
+    try {
+      const userRef = doc(db, "users", username);
+      await updateDoc(userRef, updates);
+      
+      return { success: true, message: 'User updated successfully' };
+    } catch (error) {
+      throw new Error(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExistingUserIds(): Promise<string[]> {
+    try {
+      const snapshot = await getDocs(collection(db, "logs"));
+      const userIds = [...new Set(snapshot.docs.map(doc => doc.data().cleanerId))];
+      return userIds.filter(id => id && id !== 'MANAGER');
+    } catch (error) {
+      throw new Error(`Failed to get existing user IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async addUser(userData: { firstName: string; lastName: string; email: string; phone: string }) {
+    // Generate username from first.lastname (lowercase, no spaces)
+    const username = `${userData.firstName.toLowerCase()}.${userData.lastName.toLowerCase()}`.replace(/\s+/g, '');
+    
+    // Check if user already exists
+    const existingUsers = await this.getUsers();
+    if (existingUsers.find(u => u.username === username)) {
+      throw new Error('Username already exists');
+    }
+
+    // Use the username as the document ID to ensure consistency
+    const userRef = doc(db, "users", username);
+    await setDoc(userRef, {
+      id: username,
+      username: username,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      email: userData.email,
+      phone: userData.phone,
+      active: true,
+      createdAt: new Date()
+    });
+    
+    return { success: true, message: 'User added successfully' };
+  }
+
+  async deleteAllUsers(): Promise<{ success: boolean; message: string; deletedCount: number }> {
+    try {
+      const snapshot = await getDocs(collection(db, "users"));
+      let deletedCount = 0;
+      
+      for (const docSnapshot of snapshot.docs) {
+        await deleteDoc(docSnapshot.ref);
+        deletedCount++;
+      }
+      
+      return {
+        success: true,
+        message: `Successfully deleted ${deletedCount} users`,
+        deletedCount
+      };
+    } catch (error) {
+      throw new Error(`Failed to delete users: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
 
   // Facility Resolution
   async resolveFacility(cleanerId: string, date?: string) {

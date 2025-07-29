@@ -6,6 +6,7 @@ import { Navigation } from '@/components/Navigation';
 import { CleanerLogin } from '@/components/CleanerLogin';
 import { ManagerLogin } from '@/components/ManagerLogin';
 import { ManagerInterface } from '@/components/ManagerInterface';
+import { CalendarView } from '@/components/CalendarView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -34,11 +35,12 @@ interface Facility {
 
 export default function Index() {
   const [cleanerId, setCleanerId] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'timer' | 'manager'>('timer');
+  const [currentView, setCurrentView] = useState<'timer' | 'manager' | 'calendar'>('timer');
   const [showManagerLogin, setShowManagerLogin] = useState(false);
   const [selectedFacility, setSelectedFacility] = useState('');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [users, setUsers] = useState<Array<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -51,6 +53,7 @@ export default function Index() {
     }
     
     loadFacilities();
+    loadUsers();
   }, []);
 
   // Reload time entries when facilities are loaded
@@ -71,6 +74,15 @@ export default function Index() {
         description: "Failed to load facilities",
         variant: "destructive",
       });
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const usersData = await firestoreService.getUsers();
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error loading users:', error);
     }
   };
 
@@ -136,6 +148,7 @@ export default function Index() {
 
   const handleManagerLogin = () => {
     setShowManagerLogin(false);
+    setCleanerId('MANAGER'); // Set cleanerId to MANAGER for manager access
     setCurrentView('manager');
     toast({
       title: "Manager Access Granted",
@@ -147,7 +160,7 @@ export default function Index() {
     setShowManagerLogin(false);
   };
 
-  const handleViewChange = (view: 'timer' | 'manager') => {
+  const handleViewChange = (view: 'timer' | 'manager' | 'calendar') => {
     if (view === 'manager') {
       const hasManagerAuth = localStorage.getItem('teamtracker-manager-auth') === 'true';
       if (!hasManagerAuth) {
@@ -224,6 +237,11 @@ export default function Index() {
     return (totalSeconds / 3600).toFixed(1); // Convert seconds to hours
   };
 
+  const getUserDisplayName = (cleanerId: string) => {
+    const user = users.find(u => u.username === cleanerId);
+    return user ? `${user.firstName} ${user.lastName} (${cleanerId})` : cleanerId;
+  };
+
 
 
   // If not logged in, show login screen
@@ -248,6 +266,7 @@ export default function Index() {
         onLogout={handleLogout}
         onBackToFacilitySelection={handleBackToFacilitySelection}
         onBackToLogin={handleBackToLogin}
+        users={users}
       />
       
       <div className="container mx-auto px-4 py-6 pt-20 pb-8">
@@ -263,7 +282,7 @@ export default function Index() {
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Badge variant="secondary" className="text-base px-4 py-2 bg-gradient-primary/10 text-primary border-primary/20">
-                  👤 {cleanerId}
+                  👤 {getUserDisplayName(cleanerId)}
                 </Badge>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="hover:bg-destructive/10 hover:text-destructive transition-all duration-300">
                   <LogOut className="h-4 w-4 mr-2" />
@@ -295,6 +314,9 @@ export default function Index() {
               </div>
             </div>
           </div>
+        ) : currentView === 'calendar' ? (
+          // Calendar View
+          <CalendarView isManager={cleanerId === 'MANAGER'} currentUserId={cleanerId} />
         ) : (
           // Manager Interface - using the original working component
           <ManagerInterface onBack={() => setCurrentView('timer')} />

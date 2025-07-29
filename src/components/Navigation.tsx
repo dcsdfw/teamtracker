@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { Menu, Clock, BarChart3, Shield, LogOut, ArrowLeft } from 'lucide-react';
+import { Menu, Clock, BarChart3, Shield, LogOut, ArrowLeft, Calendar } from 'lucide-react';
 
 interface NavigationProps {
-  currentView: 'timer' | 'manager';
-  onViewChange: (view: 'timer' | 'manager') => void;
+  currentView: 'timer' | 'manager' | 'calendar';
+  onViewChange: (view: 'timer' | 'manager' | 'calendar') => void;
   cleanerId?: string;
   totalHours?: number;
   onLogout?: () => void;
   onBackToFacilitySelection?: () => void;
   onBackToLogin?: () => void;
+  users?: Array<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean }>;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ 
@@ -19,10 +20,16 @@ export const Navigation: React.FC<NavigationProps> = ({
   onViewChange, 
   cleanerId,
   onLogout,
-  onBackToLogin
+  onBackToLogin,
+  users = []
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isManager = cleanerId === 'MANAGER';
+  
+  const getUserDisplayName = (cleanerId: string) => {
+    const user = users.find(u => u.username === cleanerId);
+    return user ? `${user.firstName} ${user.lastName} (${cleanerId})` : cleanerId;
+  };
 
 
   const menuItems = [
@@ -31,6 +38,12 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: 'Time Tracker',
       icon: Clock,
       description: isManager ? 'View time tracking' : 'Track your work time'
+    },
+    {
+      id: 'calendar',
+      label: 'Schedule Calendar',
+      icon: Calendar,
+      description: 'View schedule calendar'
     },
     // Manager Dashboard - available for all users
     {
@@ -63,9 +76,9 @@ export const Navigation: React.FC<NavigationProps> = ({
       // Handle action items (logout, back to login, etc.)
       item.action();
       setIsOpen(false);
-    } else if (item.id === 'timer' || item.id === 'manager') {
+    } else if (item.id === 'timer' || item.id === 'manager' || item.id === 'calendar') {
       // Handle view changes
-      onViewChange(item.id as 'timer' | 'manager');
+      onViewChange(item.id as 'timer' | 'manager' | 'calendar');
       setIsOpen(false);
     }
   };
@@ -176,7 +189,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   <div className="font-semibold text-foreground">Professional Time Tracking</div>
                   {cleanerId && (
                     <div className="text-xs text-primary font-medium">
-                      {isManager ? 'Manager Access' : `Cleaner ID: ${cleanerId}`}
+                      {isManager ? 'Manager Access' : `User: ${getUserDisplayName(cleanerId)}`}
                     </div>
                   )}
                 </div>
