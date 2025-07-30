@@ -1,0 +1,264 @@
+import { supabase } from '../supabaseClient'
+
+export async function deleteAllScheduleRules() {
+  const { data, error } = await supabase
+    .from('schedule_rules')
+    .delete()
+    .neq('id', 0) // Delete all records
+
+  if (error) {
+    console.error('Error deleting schedule rules:', error)
+    throw error
+  }
+
+  console.log(`✅ Cleared schedule_rules documents`)
+  return data
+}
+
+export async function addScheduleRule(rule: {
+  name: string;
+  facilityId: string;
+  rrule: string;
+  color?: string;
+  notes?: string;
+}) {
+  const { data, error } = await supabase
+    .from('schedule_rules')
+    .insert([rule])
+    .select()
+
+  if (error) {
+    console.error('Error adding schedule rule:', error)
+    throw error
+  }
+
+  return data?.[0]
+}
+
+export async function getScheduleRules() {
+  const { data, error } = await supabase
+    .from('schedule_rules')
+    .select('*')
+
+  if (error) {
+    console.error('Error getting schedule rules:', error)
+    throw error
+  }
+
+  return data || []
+}
+
+// Additional functions for ScheduleManager compatibility
+export async function getFacilities() {
+  const { data, error } = await supabase
+    .from('facilities')        // ← matches new table
+    .select('*');
+  if (error) throw error;
+  return data!;
+}
+
+export async function getUsers() {
+  const { data, error } = await supabase
+    .from('profiles')          // ← use profiles, not users
+    .select('id, email, first_name, last_name, role');
+  if (error) throw error;
+  return data!;
+}
+
+// DEPRECATED: Schedule table functions - now using schedule_rules instead
+// export async function getSchedule(date: string) {
+//   // Removed - use getScheduleRules() instead
+//   return []
+// }
+
+// export async function addScheduleEntry(entry: any) {
+//   // Removed - use addScheduleRule() instead
+//   return null
+// }
+
+// export async function updateScheduleEntry(id: string, updates: any) {
+//   // Removed - use updateScheduleRule() instead
+//   return null
+// }
+
+// export async function deleteScheduleEntry(id: string) {
+//   // Removed - use deleteScheduleRule() instead
+// }
+
+// Time entry functions
+export async function getTimeEntries(cleanerId?: string) {
+  let query = supabase.from('time_entries').select('*')
+  
+  if (cleanerId) {
+    query = query.eq('user_id', cleanerId)
+  }
+  
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(100)
+
+  if (error) {
+    console.error('Error getting time entries:', error)
+    throw error
+  }
+
+  return data || []
+}
+
+export async function addTimeEntry(entry: {
+  cleanerId: string;
+  facilityId: string;
+  startISO: string;
+  endISO: string;
+  durationMinutes: number;
+  notes?: string;
+}) {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .insert([{
+      user_id: entry.cleanerId,
+      facility_id: entry.facilityId,
+      start_time: entry.startISO,
+      end_time: entry.endISO,
+      notes: entry.notes
+    }])
+    .select()
+
+  if (error) {
+    console.error('Error adding time entry:', error)
+    throw error
+  }
+
+  return { success: true, data: data?.[0] }
+}
+
+// Facility management functions
+export async function addFacility(facility: { id: string; name: string; nickname?: string }) {
+  const { data, error } = await supabase
+    .from('facilities')
+    .insert([facility])
+    .select()
+
+  if (error) {
+    console.error('Error adding facility:', error)
+    throw error
+  }
+
+  return data?.[0]
+}
+
+export async function updateFacility(facilityId: string, updates: { name?: string; nickname?: string }) {
+  const { data, error } = await supabase
+    .from('facilities')
+    .update(updates)
+    .eq('id', facilityId)
+    .select()
+
+  if (error) {
+    console.error('Error updating facility:', error)
+    throw error
+  }
+
+  return data?.[0]
+}
+
+// User management functions
+export async function addUser(userData: { firstName: string; lastName: string; email: string; phone: string }) {
+  const username = `${userData.firstName.toLowerCase()}.${userData.lastName.toLowerCase()}`
+  
+  const { data, error } = await supabase
+    .from('users')
+    .insert([{
+      ...userData,
+      id: username,
+      username,
+      active: true,
+      createdAt: new Date().toISOString()
+    }])
+    .select()
+
+  if (error) {
+    console.error('Error adding user:', error)
+    throw error
+  }
+
+  return data?.[0]
+}
+
+export async function updateUser(username: string, updates: { firstName?: string; lastName?: string; email?: string; phone?: string; active?: boolean }) {
+  const { data, error } = await supabase
+    .from('users')
+    .update(updates)
+    .eq('username', username)
+    .select()
+
+  if (error) {
+    console.error('Error updating user:', error)
+    throw error
+  }
+
+  return data?.[0]
+}
+
+// Time entry deletion
+export async function deleteTimeEntry(entryId: string) {
+  const { error } = await supabase
+    .from('time_entries')
+    .delete()
+    .eq('id', entryId)
+
+  if (error) {
+    console.error('Error deleting time entry:', error)
+    throw error
+  }
+}
+
+// Additional utility functions
+export async function getExistingUserIds() {
+  try {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .select('user_id')
+      .neq('user_id', null)
+      .limit(100);
+    if (error) throw error;
+    // Dedupe the array of IDs
+    return Array.from(new Set(data.map(d => d.user_id)));
+  } catch (err) {
+    console.error('Error getting existing user IDs', err);
+    return [];
+  }
+}
+
+// DEPRECATED: deleteAllScheduleEntries removed - schedule table no longer exists
+// export async function deleteAllScheduleEntries() {
+//   // Removed - use deleteAllScheduleRules() instead
+// }
+
+export async function deleteScheduleRule(ruleId: string) {
+  const { error } = await supabase
+    .from('schedule_rules')
+    .delete()
+    .eq('id', ruleId)
+
+  if (error) {
+    console.error('Error deleting schedule rule:', error)
+    throw error
+  }
+
+  return { success: true, message: 'Schedule rule deleted successfully' }
+} 
+
+export async function getMonthlyTimeEntries(userId: string, month: string) {
+  const from = `${month}-01T00:00:00Z`;
+  const to   = `${month}-31T23:59:59Z`;
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('id, user_id, facility_id, start_time, end_time')
+    .eq('user_id', userId)
+    .gte('start_time', from)
+    .lte('end_time', to);
+  if (error) throw error;
+  return data!.map(r => ({
+    ...r,
+    durationH: (new Date(r.end_time).getTime() - new Date(r.start_time).getTime())/3600000
+  }));
+} 

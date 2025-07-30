@@ -7,14 +7,19 @@ import { Navigation } from '@/components/Navigation';
 import { CleanerLogin } from '@/components/CleanerLogin';
 import { ManagerLogin } from '@/components/ManagerLogin';
 import { ManagerInterface } from '@/components/ManagerInterface';
-import { CalendarView } from '@/components/CalendarView';
+import CalendarView from '@/components/CalendarView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Clock, LogOut } from 'lucide-react';
 
-// Import our existing backend services
-import { firestoreService } from '../firestoreService';
+// Import our Supabase backend services
+import { 
+  getFacilities, 
+  getUsers, 
+  getTimeEntries, 
+  addTimeEntry 
+} from '../services/scheduleService';
 
 interface TimeEntry {
   id: string;
@@ -54,7 +59,7 @@ export default function Index() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Load data from localStorage and Firebase on mount
+  // Load data from localStorage and Supabase on mount
   useEffect(() => {
     const savedCleanerId = localStorage.getItem('cleanerId');
     
@@ -75,7 +80,7 @@ export default function Index() {
 
   const loadFacilities = async () => {
     try {
-      const facilitiesData = await firestoreService.getFacilities();
+      const facilitiesData = await getFacilities();
       setFacilities(facilitiesData);
     } catch (error) {
       console.error('Error loading facilities:', error);
@@ -89,7 +94,7 @@ export default function Index() {
 
   const loadUsers = async () => {
     try {
-      const usersData = await firestoreService.getUsers();
+      const usersData = await getUsers();
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -99,10 +104,10 @@ export default function Index() {
   const loadTimeEntries = async (id?: string) => {
     setLoading(true);
     try {
-      const firestoreEntries = await firestoreService.getTimeEntries(id);
+      const supabaseEntries = await getTimeEntries(id);
       
-      // Transform Firestore data to match TimeEntry interface
-      const transformedEntries = firestoreEntries.map((entry: any) => {
+      // Transform Supabase data to match TimeEntry interface
+      const transformedEntries = supabaseEntries.map((entry: any) => {
         // Find facility name by ID
         const facility = facilities.find(f => f.id === entry.facilityId);
         
@@ -206,7 +211,7 @@ export default function Index() {
         return;
       }
 
-      const result = await firestoreService.addTimeEntry({
+      const result = await addTimeEntry({
         cleanerId,
         facilityId: facility.id, // Use facility ID, not name
         startISO: entry.startTime.toISOString(),
@@ -239,7 +244,7 @@ export default function Index() {
   };
 
   const handleDeleteEntry = async (id: string) => {
-    // Note: We'll need to add delete functionality to firestoreService
+    // Note: We'll need to add delete functionality to scheduleService
     // For now, just remove from local state
     setTimeEntries(prev => prev.filter(entry => entry.id !== id));
     toast({

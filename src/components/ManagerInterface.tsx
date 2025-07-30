@@ -1,7 +1,4 @@
 import { useState, useEffect } from 'react'
-import { firestoreService } from '../firestoreService'
-import { onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore'
-import { db } from '../firebase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle, Pencil, Trash2 } from 'lucide-react'
 import { ScheduleManager } from './ScheduleManager'
+import { addTestScheduleRule, getScheduleRules } from '../testScheduleRule'
+import { 
+  getFacilities, 
+  getUsers, 
+  getTimeEntries, 
+  addFacility, 
+  updateFacility, 
+  addUser, 
+  updateUser, 
+  deleteTimeEntry,
+  getExistingUserIds
+  // deleteAllScheduleEntries - DEPRECATED
+} from '../services/scheduleService'
 
 interface ManagerInterfaceProps {
   onBack: () => void
@@ -41,6 +51,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [showAddFacility, setShowAddFacility] = useState(false)
   const [newFacilityId, setNewFacilityId] = useState('')
   const [newFacilityName, setNewFacilityName] = useState('')
+  const [newFacilityNickname, setNewFacilityNickname] = useState('')
   const [showAddUser, setShowAddUser] = useState(false)
   const [newUserFirstName, setNewUserFirstName] = useState('')
   const [newUserLastName, setNewUserLastName] = useState('')
@@ -57,19 +68,37 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [editUserPhone, setEditUserPhone] = useState('')
   
   // Facility editing state
-  const [editingFacility, setEditingFacility] = useState<{ id: string; name: string } | null>(null)
+  const [editingFacility, setEditingFacility] = useState<{ id: string; name: string; nickname?: string } | null>(null)
   const [editFacilityId, setEditFacilityId] = useState('')
   const [editFacilityName, setEditFacilityName] = useState('')
+  const [editFacilityNickname, setEditFacilityNickname] = useState('')
 
   const { toast } = useToast()
 
-  useEffect(() => {
+    useEffect(() => {
     loadFacilities()
     loadUsers()
     const unsubscribe = setupTimeEntriesListener()
-    // Set today's date as default
-    const today = new Date().toISOString().split('T')[0]
-    setSelectedDate(today)
+    
+    // Get the current date from an internet time service to ensure accuracy
+    const getCurrentDate = async () => {
+      try {
+        // Use a simple time API to get the current date
+        const response = await fetch('https://worldtimeapi.org/api/ip')
+        const data = await response.json()
+        const currentDate = new Date(data.datetime).toISOString().split('T')[0]
+        setSelectedDate(currentDate)
+      } catch (error) {
+        // Fallback to local date if internet time service fails
+         const today = new Date().toISOString().split('T')[0]
+         setSelectedDate(today)
+      }
+    }
+    
+    getCurrentDate()
+
+    // Removed automatic database clearing - this was a mistake!
+    // The manual "Clear All Schedule Data" button is available when needed
 
     // Cleanup function to unsubscribe from listener
     return () => {
@@ -82,7 +111,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
 
   const loadFacilities = async () => {
     try {
-      const facilitiesData = await firestoreService.getFacilities()
+      const facilitiesData = await getFacilities()
       setFacilities(facilitiesData)
     } catch (error) {
       console.error('Error loading facilities:', error)
@@ -97,32 +126,21 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const loadUsers = async () => {
     try {
       console.log('Loading users...')
-      const usersData = await firestoreService.getUsers()
-      console.log('Users loaded from users collection:', usersData)
+      const usersData = await getUsers()
+      console.log('Users loaded from profiles collection:', usersData)
       
-      // If no users in users collection, try to get from logs collection
-      if (usersData.length === 0) {
-        console.log('No users in users collection, checking logs collection...')
-        const existingUserIds = await firestoreService.getExistingUserIds()
-        console.log('Existing user IDs from logs:', existingUserIds)
-        
-        // Create user objects from the IDs found in logs
-        const usersFromLogs = existingUserIds.map(id => ({
-          id: id,
-          username: id,
-          firstName: id.split('.')[0] || id,
-          lastName: id.split('.')[1] || '',
-          email: '',
-          phone: '',
-          active: true,
-          createdAt: new Date()
-        }))
-        
-        console.log('Users created from logs:', usersFromLogs)
-        setUsers(usersFromLogs)
-      } else {
-        setUsers(usersData)
-      }
+      // Map profiles data to expected user format
+      const mappedUsers = usersData.map((user: any) => ({
+        id: user.id,
+        username: user.email || user.id,
+        firstName: user.first_name || '',
+        lastName: user.last_name || '',
+        email: user.email || '',
+        phone: '',
+        active: true
+      }))
+      
+      setUsers(mappedUsers)
     } catch (error) {
       console.error('Error loading users:', error)
       toast({
@@ -140,43 +158,30 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       setLoadingEntries(true)
       setListenerActive(true)
       
-      // Create a real-time listener for time entries
-      const q = query(
-        collection(db, "logs"),
-        orderBy("createdAt", "desc"),
-        limit(100)
-      )
+      // Load time entries from Supabase (no real-time listener for now)
+      const loadTimeEntries = async () => {
+        try {
+          const entries = await getTimeEntries()
+          setTimeEntries(entries)
+          setLoadingEntries(false)
+        } catch (error) {
+          console.error('Error loading time entries:', error)
+          toast({
+            title: "Error",
+            description: `Error loading time entries: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            variant: "destructive",
+          })
+          setLoadingEntries(false)
+          setListenerActive(false)
+        }
+      }
       
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const entries = snapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            cleanerId: data.cleanerId,
-            facilityId: data.facilityId,
-            startISO: data.startISO,
-            endISO: data.endISO,
-            durationMinutes: data.durationMinutes,
-            notes: data.notes,
-            createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-          } as TimeEntry
-        })
-        
-        setTimeEntries(entries)
-        setLoadingEntries(false)
-      }, (error) => {
-        console.error('Error listening to time entries:', error)
-        toast({
-          title: "Error",
-          description: `Error listening to time entries: ${error.message}`,
-          variant: "destructive",
-        })
-        setLoadingEntries(false)
+      loadTimeEntries()
+      
+      // Return a cleanup function
+      return () => {
         setListenerActive(false)
-      })
-      
-      // Store the unsubscribe function for cleanup
-      return unsubscribe
+      }
     } catch (error) {
       console.error('Error setting up time entries listener:', error)
       toast({
@@ -214,9 +219,10 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     setIsLoading(true)
 
     try {
-      await firestoreService.addFacility({
+      await addFacility({
         id: newFacilityId.trim(),
-        name: newFacilityName.trim()
+        name: newFacilityName.trim(),
+        nickname: newFacilityNickname.trim() || undefined
       })
       
       // Reload facilities to include the new one
@@ -229,6 +235,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       setShowAddFacility(false)
       setNewFacilityId('')
       setNewFacilityName('')
+      setNewFacilityNickname('')
     } catch (error) {
       console.error('Error adding facility:', error)
       toast({
@@ -291,7 +298,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     setIsLoading(true)
     try {
       // Update the user in the database
-      await firestoreService.updateUser(editingUser.id, {
+      await updateUser(editingUser.id, {
         firstName: editUserFirstName.trim(),
         lastName: editUserLastName.trim(),
         email: editUserEmail.trim(),
@@ -354,7 +361,10 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
 
     setIsLoading(true);
     try {
-      await firestoreService.updateFacility(editingFacility.id, editFacilityName.trim());
+      await updateFacility(editingFacility.id, {
+        name: editFacilityName.trim(),
+        nickname: editFacilityNickname.trim() || undefined
+      });
       toast({
         title: "Facility Updated Successfully",
         description: `${editFacilityName} has been updated.`,
@@ -363,6 +373,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       setEditingFacility(null);
       setEditFacilityId('');
       setEditFacilityName('');
+      setEditFacilityNickname('');
     } catch (error) {
       console.error('Error updating facility:', error);
       toast({
@@ -375,21 +386,23 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   };
 
-  const startEditFacility = (facility: { id: string; name: string }) => {
+  const startEditFacility = (facility: { id: string; name: string; nickname?: string }) => {
     setEditingFacility(facility);
     setEditFacilityId(facility.id);
     setEditFacilityName(facility.name);
+    setEditFacilityNickname(facility.nickname || '');
   };
 
   const cancelEditFacility = () => {
     setEditingFacility(null);
     setEditFacilityId('');
     setEditFacilityName('');
+    setEditFacilityNickname('');
   };
 
   const handleDeleteTimeEntry = async (entryId: string, facilityName: string) => {
     try {
-      await firestoreService.deleteTimeEntry(entryId);
+      await deleteTimeEntry(entryId);
       toast({
         title: "Entry Deleted",
         description: `Time entry for ${facilityName} has been removed.`,
@@ -403,6 +416,10 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       });
     }
   };
+
+
+
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -421,7 +438,85 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
         </div>
         
         <div className="mb-8 ml-4">
-          <h1 className="text-3xl font-bold text-foreground">Manager Dashboard</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-foreground">Manager Dashboard</h1>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                try {
+                  // DEPRECATED: Individual schedule entries removed - use schedule rules instead
+                  toast({
+                    title: "Info",
+                    description: "Individual schedule entries are deprecated. Use schedule rules instead.",
+                  })
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: "Failed to clear database.",
+                    variant: "destructive",
+                  })
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear All Schedule Data
+            </Button>
+            
+            {/* Test Schedule Rules Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <Button
+                onClick={() => {
+                  addTestScheduleRule()
+                    .then(() => {
+                      console.log('Test rule added')
+                      toast({
+                        title: "Success",
+                        description: "Test schedule rule added successfully!",
+                      })
+                    })
+                    .catch((error) => {
+                      console.error('Error adding test schedule rule:', error)
+                      toast({
+                        title: "Error",
+                        description: `Error adding test schedule rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        variant: "destructive",
+                      })
+                    })
+                }}
+                className="btn btn-success flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add Test Schedule Rule
+              </Button>
+              
+              <Button
+                onClick={() => {
+                  getScheduleRules()
+                    .then(rules => {
+                      console.log('Current rules:', rules)
+                      toast({
+                        title: "Schedule Rules",
+                        description: `Found ${rules.length} schedule rules`,
+                      })
+                    })
+                    .catch((error) => {
+                      console.error('Error getting schedule rules:', error)
+                      toast({
+                        title: "Error",
+                        description: `Error getting schedule rules: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        variant: "destructive",
+                      })
+                    })
+                }}
+                className="btn btn-primary flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                <FileText className="h-4 w-4" />
+                View Schedule Rules
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
@@ -437,6 +532,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
             </CardHeader>
             <CardContent>
               <ScheduleManager selectedDate={selectedDate} />
+              
             </CardContent>
           </Card>
 
@@ -722,6 +818,21 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="newFacilityNickname">Nickname (Optional)</Label>
+                    <Input
+                      type="text"
+                      id="newFacilityNickname"
+                      value={newFacilityNickname}
+                      onChange={(e) => setNewFacilityNickname(e.target.value)}
+                      placeholder="e.g., DOB, Main Office"
+                      className="bg-background/50"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Short name for calendar display (e.g., "DOB" for "Downtown Office Building")
+                    </p>
+                  </div>
+
                   <div className="flex gap-2">
                     <Button 
                       onClick={handleAddFacility} 
@@ -745,6 +856,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         setShowAddFacility(false)
                         setNewFacilityId('')
                         setNewFacilityName('')
+                        setNewFacilityNickname('')
                       }}
                       variant="outline"
                       className="flex-1"
@@ -815,6 +927,21 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         placeholder="e.g., Downtown Office Building"
                         className="bg-background/50"
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editFacilityNickname">Nickname (Optional)</Label>
+                      <Input
+                        type="text"
+                        id="editFacilityNickname"
+                        value={editFacilityNickname}
+                        onChange={(e) => setEditFacilityNickname(e.target.value)}
+                        placeholder="e.g., DOB, Main Office"
+                        className="bg-background/50"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Short name for calendar display (e.g., "DOB" for "Downtown Office Building")
+                      </p>
                     </div>
 
                     <div className="flex gap-2">

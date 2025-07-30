@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { firestoreService } from '../firestoreService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Calendar, Plus, Edit, Trash2, Clock, Building2, Users, RefreshCw, X, ChevronDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { refetchCalendar } from './CalendarView'
+import { 
+  addScheduleRule, 
+  getFacilities, 
+  getUsers
+  // getSchedule, addScheduleEntry, updateScheduleEntry, deleteScheduleEntry - DEPRECATED
+} from '../services/scheduleService'
 
 interface ScheduleEntry {
   id?: string
@@ -27,6 +33,7 @@ interface ScheduleManagerProps {
 
 export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleManagerProps) => {
   const [isLoading, setIsLoading] = useState(false)
+  const [isProcessingRecurring, setIsProcessingRecurring] = useState(false)
   const [facilities, setFacilities] = useState<Array<{ id: string; name: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; username: string; firstName: string; lastName: string }>>([])
   const [scheduleEntries, setScheduleEntries] = useState<ScheduleEntry[]>([])
@@ -49,6 +56,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
     type: 'weekly' as 'daily' | 'weekly' | 'bi-weekly' | 'monthly',
     daysOfWeek: [] as number[],
     interval: 1,
+    startDate: '', // Add custom start date
     endDate: ''
   })
 
@@ -87,16 +95,23 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
     setIsLoading(true)
     try {
       const [facilitiesData, usersData] = await Promise.all([
-        firestoreService.getFacilities(),
-        firestoreService.getUsers()
+        getFacilities(),
+        getUsers()
       ])
       setFacilities(facilitiesData)
       setUsers(usersData)
 
-      if (selectedDate) {
-        const entries = await firestoreService.getSchedule(selectedDate)
-        setScheduleEntries(entries)
-      }
+      // Load all schedule entries for the current month
+      const currentDate = selectedDate ? new Date(selectedDate) : new Date()
+      const year = currentDate.getFullYear()
+      const month = currentDate.getMonth() + 1
+      const daysInMonth = new Date(year, month, 0).getDate()
+      
+      const allEntries: ScheduleEntry[] = []
+      
+      // DEPRECATED: Schedule loading removed - now using schedule_rules instead
+      // Calendar events are now generated from schedule_rules via CalendarView
+      setScheduleEntries([])
     } catch (error) {
       toast({
         title: "Error",
@@ -117,6 +132,13 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
       endTime: '',
       notes: ''
     })
+    setRecurringData({
+      type: 'weekly',
+      daysOfWeek: [],
+      interval: 1,
+      startDate: '',
+      endDate: ''
+    })
     setEditingEntry(null)
   }
 
@@ -125,19 +147,11 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
     setIsLoading(true)
 
     try {
-      if (editingEntry?.id) {
-        await firestoreService.updateScheduleEntry(editingEntry.id, formData)
-        toast({
-          title: "Success",
-          description: "Schedule entry updated successfully",
-        })
-      } else {
-        await firestoreService.addScheduleEntry(formData)
-        toast({
-          title: "Success",
-          description: "Schedule entry added successfully",
-        })
-      }
+      // DEPRECATED: Individual schedule entries removed - use recurring schedules instead
+      toast({
+        title: "Info",
+        description: "Individual schedule entries are deprecated. Use recurring schedules instead.",
+      })
       
       resetForm()
       loadData()
@@ -158,10 +172,10 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
     
     setIsLoading(true)
     try {
-      await firestoreService.deleteScheduleEntry(deleteEntryId)
+      // DEPRECATED: Individual schedule entries removed - use recurring schedules instead
       toast({
-        title: "Success",
-        description: "Schedule entry deleted successfully",
+        title: "Info",
+        description: "Individual schedule entries are deprecated. Use recurring schedules instead.",
       })
       setDeleteEntryId(null)
       loadData()
@@ -189,25 +203,87 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
     })
   }
 
+  // Helper function to build RRULE string from recurrence options
+  const buildRRuleString = () => {
+    const { type, daysOfWeek, interval, endDate } = recurringData
+    
+    let rrule = 'FREQ='
+    
+    switch (type) {
+      case 'daily':
+        rrule += 'DAILY'
+        break
+      case 'weekly':
+        rrule += 'WEEKLY'
+        if (daysOfWeek.length > 0) {
+          rrule += `;BYDAY=${daysOfWeek.map(day => ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][day]).join(',')}`
+        }
+        break
+      case 'bi-weekly':
+        rrule += 'WEEKLY;INTERVAL=2'
+        if (daysOfWeek.length > 0) {
+          rrule += `;BYDAY=${daysOfWeek.map(day => ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][day]).join(',')}`
+        }
+        break
+      case 'monthly':
+        rrule += 'MONTHLY'
+        break
+    }
+    
+    if (interval > 1 && type !== 'bi-weekly') {
+      rrule += `;INTERVAL=${interval}`
+    }
+    
+    if (endDate) {
+      rrule += `;UNTIL=${endDate.replace(/-/g, '')}T235959Z`
+    } else {
+      // Default to 1 year if no end date
+      const oneYearFromNow = new Date()
+      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+      rrule += `;UNTIL=${oneYearFromNow.toISOString().slice(0, 10).replace(/-/g, '')}T235959Z`
+    }
+    
+    return rrule
+  }
+
   const handleRecurringSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setIsProcessingRecurring(true)
 
     try {
-      const entry: ScheduleEntry = {
-        date: formData.date,
-        cleanerIds: formData.cleanerIds,
-        facilityId: formData.facilityId,
-        startTime: formData.startTime || undefined,
-        endTime: formData.endTime || undefined,
-        notes: formData.notes || undefined
+      // Validate required fields
+      if (!formData.facilityId || formData.cleanerIds.length === 0) {
+        throw new Error('Please select a facility and at least one cleaner')
       }
 
-      await firestoreService.addRecurringSchedule(entry, recurringData)
+      if (recurringData.type !== 'daily' && recurringData.daysOfWeek.length === 0) {
+        throw new Error('Please select at least one day of the week for weekly/bi-weekly schedules')
+      }
+
+      // Get facility name for the schedule rule
+      const facilityName = getFacilityName(formData.facilityId)
+      
+      // Build the RRULE string
+      const rruleString = buildRRuleString()
+      
+      console.log('Creating schedule rule with RRULE:', rruleString)
+
+      // Add the schedule rule using the new approach
+      await addScheduleRule({
+        name: facilityName,
+        facilityId: formData.facilityId,
+        rrule: rruleString,
+        color: '#3b82f6', // Default blue color
+        notes: formData.notes || `Recurring schedule for ${facilityName}`
+      })
+
       toast({
         title: "Success",
-        description: "Recurring schedule created successfully",
+        description: "Recurring schedule rule created successfully",
       })
+      
+      // Refresh the calendar to show the new events
+      refetchCalendar()
       
       resetForm()
       onScheduleUpdated?.()
@@ -218,7 +294,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsProcessingRecurring(false)
     }
   }
 
@@ -249,10 +325,10 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5" />
-          <h3 className="text-lg font-semibold">Today's Date</h3>
+          <h3 className="text-lg font-semibold">Schedule Entries</h3>
           {selectedDate && (
             <Badge variant="secondary">
-              {new Date(selectedDate).toLocaleDateString()}
+              {new Date(selectedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </Badge>
           )}
         </div>
@@ -432,7 +508,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
                 <Label className="font-medium">Recurring Schedule Options</Label>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="recurrenceType">Recurrence Type</Label>
                   <Select
@@ -451,6 +527,18 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
                       <SelectItem value="monthly">Monthly</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label htmlFor="startDate">Start Date</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={recurringData.startDate || formData.date}
+                    onChange={(e) => setRecurringData(prev => ({ ...prev, startDate: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When to start the recurring schedule
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="endDate">End Date (Optional)</Label>
@@ -490,7 +578,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
             </div>
 
             <div className="flex gap-2">
-              <Button type="submit" disabled={isLoading} className="flex-1">
+              <Button type="submit" disabled={isLoading || isProcessingRecurring} className="flex-1">
                 {isLoading ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -505,12 +593,16 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
               </Button>
               <Button
                 type="button"
-                onClick={handleRecurringSubmit}
-                disabled={isLoading || (recurringData.type !== 'daily' && recurringData.daysOfWeek.length === 0)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleRecurringSubmit(e)
+                }}
+                disabled={isLoading || isProcessingRecurring || (recurringData.type !== 'daily' && recurringData.daysOfWeek.length === 0)}
                 variant="outline"
                 className="flex-1"
               >
-                {isLoading ? (
+                {isProcessingRecurring ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                     Creating...
@@ -527,7 +619,7 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
                   type="button"
                   variant="outline"
                   onClick={resetForm}
-                  disabled={isLoading}
+                  disabled={isLoading || isProcessingRecurring}
                 >
                   Cancel
                 </Button>
@@ -556,62 +648,78 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
               <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
               <p className="text-muted-foreground">Loading...</p>
             </div>
-          ) : scheduleEntries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No schedule entries for this date
-            </div>
           ) : (
             <div className="space-y-3">
-              {scheduleEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="p-3 border rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
+              {/* Processing message appears as first item in the list */}
+              {isProcessingRecurring && (
+                <div className="p-3 border rounded-lg bg-muted/20 border-dashed border-primary/30">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw className="h-4 w-4 animate-spin text-primary" />
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Building2 className="h-3 w-3 text-muted-foreground" />
-                        <span className="font-medium">{getFacilityName(entry.facilityId)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Users className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-sm">
-                          {entry.cleanerIds.map(id => getUserDisplayName(id)).join(', ')}
-                        </span>
-                      </div>
-                      {entry.startTime && entry.endTime && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">
-                            {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
-                          </span>
-                        </div>
-                      )}
-                      {entry.notes && (
-                        <p className="text-sm text-muted-foreground mt-1">{entry.notes}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleEdit(entry)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeleteEntryId(entry.id!)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <p className="text-sm font-medium text-primary">Creating recurring schedule...</p>
+                      <p className="text-xs text-muted-foreground">This may take a moment</p>
                     </div>
                   </div>
                 </div>
-              ))}
+              )}
+              
+              {/* Existing schedule entries */}
+              {scheduleEntries.length === 0 && !isProcessingRecurring ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No schedule entries for this date
+                </div>
+              ) : (
+                scheduleEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="p-3 border rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Building2 className="h-3 w-3 text-muted-foreground" />
+                          <span className="font-medium">{getFacilityName(entry.facilityId)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Users className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm">
+                            {entry.cleanerIds.map(id => getUserDisplayName(id)).join(', ')}
+                          </span>
+                        </div>
+                        {entry.startTime && entry.endTime && (
+                          <div className="flex items-center gap-2 mb-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-sm">
+                              {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
+                            </span>
+                          </div>
+                        )}
+                        {entry.notes && (
+                          <p className="text-sm text-muted-foreground mt-1">{entry.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEdit(entry)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteEntryId(entry.id!)}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </CardContent>
