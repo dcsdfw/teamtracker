@@ -22,17 +22,36 @@ export async function addScheduleRule(rule: {
   color?: string;
   notes?: string;
 }) {
+  console.log("🔍 Attempting to insert schedule rule:", rule);
+  
+  const payload = {
+    name: rule.name,
+    facility_id: rule.facilityId, // ← use facility_id
+    rrule: rule.rrule,
+    color: rule.color,
+    notes: rule.notes ?? null,
+  };
+  
+  console.log("📦 Built payload:", payload);
+  
   const { data, error } = await supabase
-    .from('schedule_rules')
-    .insert([rule])
-    .select()
+    .from("schedule_rules")
+    .insert([payload])
+    .select("*");   // no columns= param
 
   if (error) {
-    console.error('Error adding schedule rule:', error)
-    throw error
+    console.error("❌ Supabase insert error:", error);
+    console.error("📋 Error details:", {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
+    throw error;
   }
 
-  return data?.[0]
+  console.log("✅ Schedule rule inserted successfully:", data);
+  return data![0];
 }
 
 export async function getScheduleRules() {

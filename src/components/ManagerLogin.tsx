@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Navigation } from '@/components/Navigation';
 import { Shield, ArrowLeft, CheckCircle } from 'lucide-react';
-
-const MANAGER_PASSWORD = 'admin123';
+import { supabase } from '@/supabaseClient';
 
 interface ManagerLoginProps {
   onManagerLogin: () => void;
@@ -13,6 +12,7 @@ interface ManagerLoginProps {
 }
 
 export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBack }) => {
+  const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,17 +20,28 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
   const handleManagerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    if (managerPassword !== MANAGER_PASSWORD) {
-      setError('Incorrect password');
-      return;
-    }
-    
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    localStorage.setItem('teamtracker-manager-auth', 'true');
-    onManagerLogin();
-    setIsLoading(false);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: managerEmail,
+        password: managerPassword
+      });
+      
+      if (error) {
+        setError(error.message);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Successfully authenticated
+      localStorage.setItem('teamtracker-manager-auth', 'true');
+      onManagerLogin();
+    } catch (err) {
+      setError('Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -84,6 +95,21 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
           <CardContent className="space-y-6">
             <form onSubmit={handleManagerLogin} className="space-y-4">
               <div className="space-y-2">
+                <label htmlFor="managerEmail" className="text-sm font-medium text-foreground">
+                  Email
+                </label>
+                <Input
+                  id="managerEmail"
+                  type="email"
+                  placeholder="Enter your email..."
+                  value={managerEmail}
+                  onChange={(e) => setManagerEmail(e.target.value)}
+                  className="h-14 text-center font-mono text-lg border-2 border-border bg-background/50 backdrop-blur-sm focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all duration-300 hover:border-primary/30"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="space-y-2">
                 <label htmlFor="managerPassword" className="text-sm font-medium text-foreground">
                   Password
                 </label>
@@ -94,7 +120,6 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
                   value={managerPassword}
                   onChange={(e) => setManagerPassword(e.target.value)}
                   className="h-14 text-center font-mono text-lg border-2 border-border bg-background/50 backdrop-blur-sm focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all duration-300 hover:border-primary/30"
-                  autoFocus
                 />
                 {error && (
                   <p className="text-sm text-destructive text-center">{error}</p>
@@ -115,7 +140,7 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
                   type="submit" 
                   className="flex-1 h-14 text-lg font-semibold text-white shadow-glow hover:shadow-timer transition-all duration-300" 
                   style={{backgroundColor: '#0066FF'}}
-                  disabled={!managerPassword.trim() || isLoading}
+                  disabled={!managerEmail.trim() || !managerPassword.trim() || isLoading}
                 >
                   {isLoading ? (
                     <div className="flex items-center gap-2">

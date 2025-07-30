@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { supabase } from '@/supabaseClient';
 
 import { User, Shield, Clock, CheckCircle } from 'lucide-react';
 
@@ -13,10 +14,9 @@ export const CleanerLogin: React.FC<CleanerLoginProps> = ({ onLogin }) => {
   const [cleanerId, setCleanerId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
   const [isManagerLoading, setIsManagerLoading] = useState(false);
-
-  const MANAGER_PASSWORD = 'admin123'; // In production, this should be more secure
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,16 +35,28 @@ export const CleanerLogin: React.FC<CleanerLoginProps> = ({ onLogin }) => {
 
   const handleManagerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (managerPassword !== MANAGER_PASSWORD) {
-      alert('Incorrect password');
-      return;
-    }
-    
     setIsManagerLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    localStorage.setItem('teamtracker-manager-auth', 'true');
-    onLogin('MANAGER');
-    setIsManagerLoading(false);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: managerEmail,
+        password: managerPassword
+      });
+      
+      if (error) {
+        alert(error.message);
+        setIsManagerLoading(false);
+        return;
+      }
+      
+      // Successfully authenticated
+      localStorage.setItem('teamtracker-manager-auth', 'true');
+      onLogin('MANAGER');
+    } catch (err) {
+      alert('Login failed. Please try again.');
+    } finally {
+      setIsManagerLoading(false);
+    }
   };
 
   return (
@@ -158,6 +170,21 @@ export const CleanerLogin: React.FC<CleanerLoginProps> = ({ onLogin }) => {
                 </div>
                 
                 <div className="space-y-2">
+                  <label htmlFor="managerEmail" className="text-sm font-medium text-foreground">
+                    Email
+                  </label>
+                  <Input
+                    id="managerEmail"
+                    type="email"
+                    placeholder="Enter your email..."
+                    value={managerEmail}
+                    onChange={(e) => setManagerEmail(e.target.value)}
+                    className="h-12 text-center border-2 border-border bg-background/50 backdrop-blur-sm focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all duration-300"
+                    autoFocus
+                  />
+                </div>
+                
+                <div className="space-y-2">
                   <label htmlFor="managerPassword" className="text-sm font-medium text-foreground">
                     Password
                   </label>
@@ -168,7 +195,6 @@ export const CleanerLogin: React.FC<CleanerLoginProps> = ({ onLogin }) => {
                     value={managerPassword}
                     onChange={(e) => setManagerPassword(e.target.value)}
                     className="h-12 text-center border-2 border-border bg-background/50 backdrop-blur-sm focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all duration-300"
-                    autoFocus
                   />
                 </div>
                 
@@ -185,7 +211,7 @@ export const CleanerLogin: React.FC<CleanerLoginProps> = ({ onLogin }) => {
                     type="submit" 
                     className="flex-1 text-white" 
                     style={{backgroundColor: '#0066FF'}}
-                    disabled={!managerPassword.trim() || isManagerLoading}
+                    disabled={!managerEmail.trim() || !managerPassword.trim() || isManagerLoading}
                   >
                     {isManagerLoading ? (
                       <div className="flex items-center gap-2">

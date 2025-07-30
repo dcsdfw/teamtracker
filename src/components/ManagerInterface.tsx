@@ -7,9 +7,8 @@ import { Label } from '@/components/ui/label'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, FileText, CheckCircle, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Clock, Building2, Users, Plus, RefreshCw, Calendar, CheckCircle, Pencil, Trash2, FileText } from 'lucide-react'
 import { ScheduleManager } from './ScheduleManager'
-import { addTestScheduleRule, getScheduleRules } from '../testScheduleRule'
 import { 
   getFacilities, 
   getUsers, 
@@ -80,19 +79,11 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     loadUsers()
     const unsubscribe = setupTimeEntriesListener()
     
-    // Get the current date from an internet time service to ensure accuracy
+    // Get the current date using local time (always available)
     const getCurrentDate = async () => {
-      try {
-        // Use a simple time API to get the current date
-        const response = await fetch('https://worldtimeapi.org/api/ip')
-        const data = await response.json()
-        const currentDate = new Date(data.datetime).toISOString().split('T')[0]
-        setSelectedDate(currentDate)
-      } catch (error) {
-        // Fallback to local date if internet time service fails
-         const today = new Date().toISOString().split('T')[0]
-         setSelectedDate(today)
-      }
+      // Just use local time (always available)
+      const today = new Date().toISOString().split('T')[0]
+      setSelectedDate(today)
     }
     
     getCurrentDate()
@@ -440,82 +431,6 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
         <div className="mb-8 ml-4">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-foreground">Manager Dashboard</h1>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                try {
-                  // DEPRECATED: Individual schedule entries removed - use schedule rules instead
-                  toast({
-                    title: "Info",
-                    description: "Individual schedule entries are deprecated. Use schedule rules instead.",
-                  })
-                } catch (error) {
-                  toast({
-                    title: "Error",
-                    description: "Failed to clear database.",
-                    variant: "destructive",
-                  })
-                }
-              }}
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Clear All Schedule Data
-            </Button>
-            
-            {/* Test Schedule Rules Buttons */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-              <Button
-                onClick={() => {
-                  addTestScheduleRule()
-                    .then(() => {
-                      console.log('Test rule added')
-                      toast({
-                        title: "Success",
-                        description: "Test schedule rule added successfully!",
-                      })
-                    })
-                    .catch((error) => {
-                      console.error('Error adding test schedule rule:', error)
-                      toast({
-                        title: "Error",
-                        description: `Error adding test schedule rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                        variant: "destructive",
-                      })
-                    })
-                }}
-                className="btn btn-success flex items-center gap-2 bg-green-600 hover:bg-green-700"
-              >
-                <Plus className="h-4 w-4" />
-                Add Test Schedule Rule
-              </Button>
-              
-              <Button
-                onClick={() => {
-                  getScheduleRules()
-                    .then(rules => {
-                      console.log('Current rules:', rules)
-                      toast({
-                        title: "Schedule Rules",
-                        description: `Found ${rules.length} schedule rules`,
-                      })
-                    })
-                    .catch((error) => {
-                      console.error('Error getting schedule rules:', error)
-                      toast({
-                        title: "Error",
-                        description: `Error getting schedule rules: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                        variant: "destructive",
-                      })
-                    })
-                }}
-                className="btn btn-primary flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-              >
-                <FileText className="h-4 w-4" />
-                View Schedule Rules
-              </Button>
-            </div>
           </div>
         </div>
 
