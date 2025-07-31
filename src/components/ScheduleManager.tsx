@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 import { Badge } from '@/components/ui/badge'
 import { Calendar, Plus, Edit, Trash2, Clock, Building2, Users, RefreshCw, X, ChevronDown, Repeat } from 'lucide-react'
@@ -899,43 +900,41 @@ export const ScheduleManager = ({ selectedDate, onScheduleUpdated }: ScheduleMan
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      {deleteEntryId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background p-6 rounded-lg border border-border/50 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Delete Schedule Entry</h3>
-            <p className="text-muted-foreground mb-6">
-              Are you sure you want to delete this schedule entry? This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                onClick={handleDelete}
-                disabled={isLoading}
-                variant="destructive"
-                className="flex-1"
-              >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={() => setDeleteEntryId(null)}
-                variant="outline"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
+      <Dialog open={!!deleteEntryId} onOpenChange={(open) => !open && setDeleteEntryId(null)}>
+        <DialogContent>
+          <DialogTitle>Delete Schedule Entry</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete this schedule entry? This action cannot be undone.
+          </DialogDescription>
+          <div className="flex gap-3 mt-6">
+            <Button
+              onClick={handleDelete}
+              disabled={isLoading}
+              variant="destructive"
+              className="flex-1"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={() => setDeleteEntryId(null)}
+              variant="outline"
+              className="flex-1"
+            >
+              Cancel
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

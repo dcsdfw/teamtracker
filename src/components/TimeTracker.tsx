@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Timer } from '@/components/Timer';
 import { FacilitySelector } from '@/components/FacilitySelector';
 import { TimeEntries } from '@/components/TimeEntries';
-
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
 import { Clock, LogOut } from 'lucide-react';
+import { supabase } from "../supabaseClient";
 
 // Import our Supabase backend services
 import { 
@@ -47,14 +47,15 @@ export default function TimeTracker() {
 
   // Handle session-based routing
   useEffect(() => {
-    if (session?.user && session?.role) {
+    if (session?.user) {
+      // Set up auth flags based on role
       if (session.role === 'manager') {
         localStorage.setItem('teamtracker-manager-auth', 'true');
-        navigate('/manager-dashboard');
-      } else {
-        localStorage.setItem('teamtracker-cleaner-id', session.user.id);
-        setCleanerId(session.user.id);
       }
+      
+      // All users (including managers) can track time
+      localStorage.setItem('teamtracker-cleaner-id', session.user.id);
+      setCleanerId(session.user.id);
     }
   }, [session, navigate]);
 
@@ -111,16 +112,6 @@ export default function TimeTracker() {
     navigate('/login');
   };
 
-  const handleBackToFacilitySelection = () => {
-    navigate('/time-tracker');
-  };
-
-  const handleBackToLogin = () => {
-    navigate('/login');
-  };
-
-
-
   const handleTimeEntry = async (entry: Omit<TimeEntry, 'id' | 'cleanerId' | 'createdAt'>) => {
     if (!cleanerId) {
       toast({
@@ -132,11 +123,24 @@ export default function TimeTracker() {
     }
 
     try {
+      // Find the facility ID by name
+      const facility = facilities.find(f => f.name === entry.facility);
+      if (!facility) {
+        toast({
+          title: "Error",
+          description: `Facility "${entry.facility}" not found`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const newEntry = {
-        ...entry,
         cleanerId,
-        id: Date.now().toString(), // Temporary ID
-        createdAt: new Date()
+        facilityId: facility.id,
+        startISO: entry.startTime.toISOString(),
+        endISO: entry.endTime.toISOString(),
+        durationMinutes: entry.duration,
+        notes: entry.notes,
       };
 
       await addTimeEntry(newEntry);

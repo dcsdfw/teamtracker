@@ -19,16 +19,13 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        {/* Navigation component always visible */}
         <Navigation />
-        
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login onBack={() => window.history.back()} />} />
           <Route path="/manager-dashboard" element={<ManagerInterface onBack={() => window.history.back()} />} />
           <Route path="/time-tracker" element={<TimeTracker />} />
           <Route path="/calendar" element={<CalendarView />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -62,19 +62,20 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Handle session-based routing
+  // Handle session-based routing - only redirect from root path
   useEffect(() => {
-    if (session?.user && session?.role) {
-      if (session.role === 'manager') {
+    // only auto-redirect if we're exactly at "/"
+    if (location.pathname === '/') {
+      if (session?.role === 'manager') {
         localStorage.setItem('teamtracker-manager-auth', 'true');
         navigate('/manager-dashboard');
-      } else {
+      } else if (session?.user) {
         localStorage.setItem('teamtracker-cleaner-id', session.user.id);
         setCleanerId(session.user.id);
         navigate('/time-tracker');
       }
     }
-  }, [session, navigate]);
+  }, [location.pathname, session, navigate]);
 
   // Single initializer for all data loading
   useEffect(() => {
