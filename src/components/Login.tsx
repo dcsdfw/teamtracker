@@ -3,41 +3,73 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-import { Shield, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Shield, User, CheckCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
-interface ManagerLoginProps {
-  onManagerLogin: () => void;
+interface LoginProps {
   onBack: () => void;
 }
 
-export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBack }) => {
-  const [managerEmail, setManagerEmail] = useState('');
-  const [managerPassword, setManagerPassword] = useState('');
+export const Login: React.FC<LoginProps> = ({ onBack }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleManagerLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
     
     try {
+      // Sign in with Supabase - using correct destructuring
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: managerEmail,
-        password: managerPassword
+        email: email.trim(),
+        password,
       });
       
       if (error) {
+        console.error('Auth error:', error);
         setError(error.message);
         setIsLoading(false);
         return;
       }
+
+      if (!data.user) {
+        setError('Login failed. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Get user profile to determine role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        setError('Could not load your profile');
+        setIsLoading(false);
+        return;
+      }
+
+      // ✅ Navigate directly after successful login
+      if (profile.role === 'manager') {
+        localStorage.setItem('teamtracker-manager-auth', 'true');
+        console.log("✅ Login OK, redirecting to:", '/manager-dashboard');
+        navigate('/manager-dashboard');
+      } else {
+        localStorage.setItem('teamtracker-cleaner-id', data.user.id);
+        console.log("✅ Login OK, redirecting to:", '/time-tracker');
+        navigate('/time-tracker');
+      }
       
-      // Successfully authenticated
-      localStorage.setItem('teamtracker-manager-auth', 'true');
-      onManagerLogin();
     } catch (err) {
+      console.error('Login error:', err);
       setError('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -56,59 +88,59 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
         {/* Enhanced Header */}
         <div className="text-center space-y-6">
           <div className="w-20 h-20 mx-auto bg-gradient-primary-glow rounded-2xl flex items-center justify-center shadow-glow animate-glow-pulse">
-            <Shield className="h-10 w-10 text-white" />
+            <User className="h-10 w-10 text-white" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold text-foreground mb-2">Manager Access</h1>
-            <p className="text-muted-foreground text-lg">Enter password to access dashboard</p>
+            <h1 className="text-4xl font-bold text-foreground mb-2">TeamTracker</h1>
+            <p className="text-muted-foreground text-lg">Professional Time Tracking System</p>
             <div className="flex items-center justify-center gap-2 mt-2 text-sm text-muted-foreground">
               <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
-              Secure Access
+              Secure Login
             </div>
           </div>
         </div>
 
-        {/* Manager Login Card */}
+        {/* Login Card */}
         <Card className="bg-card border-border/50 shadow-lg">
           <CardHeader className="text-center pb-6">
             <CardTitle className="flex items-center justify-center gap-3 text-2xl font-bold">
               <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
                 <Shield className="h-5 w-5 text-white" />
               </div>
-              Manager Login
+              Login
             </CardTitle>
             <p className="text-muted-foreground">
-              Enter your manager password to continue
+              Enter your credentials to access the system
             </p>
           </CardHeader>
           
           <CardContent className="space-y-6">
-            <form onSubmit={handleManagerLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <label htmlFor="managerEmail" className="text-sm font-medium text-foreground">
+                <label htmlFor="email" className="text-sm font-medium text-foreground">
                   Email
                 </label>
                 <Input
-                  id="managerEmail"
+                  id="email"
                   type="email"
                   placeholder="Enter your email..."
-                  value={managerEmail}
-                  onChange={(e) => setManagerEmail(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="h-14 text-center font-mono text-lg border-2 border-border bg-background/50 backdrop-blur-sm focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all duration-300 hover:border-primary/30"
                   autoFocus
                 />
               </div>
               
               <div className="space-y-2">
-                <label htmlFor="managerPassword" className="text-sm font-medium text-foreground">
+                <label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
                 </label>
                 <Input
-                  id="managerPassword"
+                  id="password"
                   type="password"
                   placeholder="Enter password..."
-                  value={managerPassword}
-                  onChange={(e) => setManagerPassword(e.target.value)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="h-14 text-center font-mono text-lg border-2 border-border bg-background/50 backdrop-blur-sm focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all duration-300 hover:border-primary/30"
                 />
                 {error && (
@@ -130,7 +162,7 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
                   type="submit" 
                   className="flex-1 h-14 text-lg font-semibold text-white shadow-glow hover:shadow-timer transition-all duration-300" 
                   style={{backgroundColor: '#0066FF'}}
-                  disabled={!managerEmail.trim() || !managerPassword.trim() || isLoading}
+                  disabled={!email.trim() || !password.trim() || isLoading}
                 >
                   {isLoading ? (
                     <div className="flex items-center gap-2">
@@ -140,7 +172,7 @@ export const ManagerLogin: React.FC<ManagerLoginProps> = ({ onManagerLogin, onBa
                   ) : (
                     <div className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4" />
-                      Access Dashboard
+                      Sign In
                     </div>
                   )}
                 </Button>

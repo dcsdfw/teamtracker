@@ -40,12 +40,13 @@ interface TimeEntry {
 }
 
 export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentDate] = useState(() => new Date().toISOString().split('T')[0]); // client clock
+  
   const [facilities, setFacilities] = useState<Array<{ id: string; name: string }>>([])
-
   const [isLoading, setIsLoading] = useState(false)
-
-  const [selectedDate, setSelectedDate] = useState<string>('')
-
+  const [selectedDate, setSelectedDate] = useState<string>(currentDate)
   const [selectedFacility, setSelectedFacility] = useState<string>('')
   const [showAddFacility, setShowAddFacility] = useState(false)
   const [newFacilityId, setNewFacilityId] = useState('')
@@ -74,31 +75,19 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
 
   const { toast } = useToast()
 
-    useEffect(() => {
-    loadFacilities()
-    loadUsers()
-    const unsubscribe = setupTimeEntriesListener()
-    
-    // Get the current date using local time (always available)
-    const getCurrentDate = async () => {
-      // Just use local time (always available)
-      const today = new Date().toISOString().split('T')[0]
-      setSelectedDate(today)
-    }
-    
-    getCurrentDate()
-
-    // Removed automatic database clearing - this was a mistake!
-    // The manual "Clear All Schedule Data" button is available when needed
-
-    // Cleanup function to unsubscribe from listener
-    return () => {
-      if (unsubscribe) {
-        unsubscribe()
-        setListenerActive(false)
-      }
-    }
-  }, [])
+  useEffect(() => {
+    // Run your data fetches in parallel, then hide spinner
+    Promise.all([
+      loadFacilities(),
+      loadUsers(),
+      loadTimeEntries(),
+    ])
+      .catch((err) => {
+        console.error('Dashboard init error:', err);
+        setError('Failed to load dashboard data. Please try refreshing.');
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const loadFacilities = async () => {
     try {
@@ -142,48 +131,44 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   }
 
-
-
-  const setupTimeEntriesListener = () => {
+  const loadTimeEntries = async () => {
     try {
       setLoadingEntries(true)
+      const entries = await getTimeEntries()
+      setTimeEntries(entries)
       setListenerActive(true)
-      
-      // Load time entries from Supabase (no real-time listener for now)
-      const loadTimeEntries = async () => {
-        try {
-          const entries = await getTimeEntries()
-          setTimeEntries(entries)
-          setLoadingEntries(false)
-        } catch (error) {
-          console.error('Error loading time entries:', error)
-          toast({
-            title: "Error",
-            description: `Error loading time entries: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            variant: "destructive",
-          })
-          setLoadingEntries(false)
-          setListenerActive(false)
-        }
-      }
-      
-      loadTimeEntries()
-      
-      // Return a cleanup function
-      return () => {
-        setListenerActive(false)
-      }
     } catch (error) {
-      console.error('Error setting up time entries listener:', error)
+      console.error('Error loading time entries:', error)
       toast({
         title: "Error",
-        description: `Error setting up time entries listener: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Error loading time entries: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       })
+    } finally {
       setLoadingEntries(false)
-      setListenerActive(false)
     }
   }
+
+  const refreshDashboard = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await Promise.all([
+        loadFacilities(),
+        loadUsers(),
+        loadTimeEntries(),
+      ]);
+    } catch (err) {
+      console.error('Dashboard refresh error:', err);
+      setError('Failed to refresh dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+
 
 
 
@@ -412,6 +397,41 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
 
 
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <RefreshCw className="h-8 w-8 text-destructive" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground mb-2">Dashboard Error</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={refreshDashboard} className="bg-primary hover:bg-primary/90">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+            <Button onClick={onBack} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -431,6 +451,14 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
         <div className="mb-8 ml-4">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-foreground">Manager Dashboard</h1>
+            <Button 
+              onClick={refreshDashboard}
+              variant="outline"
+              className="hover:bg-primary hover:text-primary-foreground transition-all duration-300"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Dashboard
+            </Button>
           </div>
         </div>
 
@@ -911,13 +939,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                   </div>
                 )}
                 <Button 
-                  onClick={() => {
-                    const unsubscribe = setupTimeEntriesListener()
-                    if (unsubscribe) {
-                      // Re-setup the listener
-                      setTimeout(() => unsubscribe(), 100)
-                    }
-                  }}
+                  onClick={() => loadTimeEntries()}
                   disabled={loadingEntries}
                   variant="outline"
                   size="sm"

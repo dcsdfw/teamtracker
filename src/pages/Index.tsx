@@ -3,14 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Timer } from '@/components/Timer';
 import { FacilitySelector } from '@/components/FacilitySelector';
 import { TimeEntries } from '@/components/TimeEntries';
-import { Navigation } from '@/components/Navigation';
-import { CleanerLogin } from '@/components/CleanerLogin';
-import { ManagerLogin } from '@/components/ManagerLogin';
+
 import { ManagerInterface } from '@/components/ManagerInterface';
 import CalendarView from '@/components/CalendarView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useSession } from '@/hooks/useSession';
+import { Login } from '@/components/Login';
 import { Clock, LogOut } from 'lucide-react';
 
 // Import our Supabase backend services
@@ -40,9 +40,13 @@ interface Facility {
 
 
 export default function Index() {
+  console.log("👋 Index component mounted, pathname:", window.location.pathname);
+  
   const location = useLocation();
   const navigate = useNavigate();
+  const { session, loading: sessionLoading } = useSession();
   const [cleanerId, setCleanerId] = useState<string | null>(null);
+  
   // Determine current view from URL path
   const getCurrentView = (): 'timer' | 'manager' | 'calendar' => {
     const path = location.pathname;
@@ -51,90 +55,89 @@ export default function Index() {
     return 'timer'; // Default to timer for '/' and '/timer'
   };
   const currentView = getCurrentView();
-  const [showManagerLogin, setShowManagerLogin] = useState(false);
   const [selectedFacility, setSelectedFacility] = useState('');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [users, setUsers] = useState<Array<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean }>>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Load data from localStorage and Supabase on mount
+  // Handle session-based routing
   useEffect(() => {
-    const savedCleanerId = localStorage.getItem('cleanerId');
-    
-    if (savedCleanerId) {
-      setCleanerId(savedCleanerId);
+    if (session?.user && session?.role) {
+      if (session.role === 'manager') {
+        localStorage.setItem('teamtracker-manager-auth', 'true');
+        navigate('/manager-dashboard');
+      } else {
+        localStorage.setItem('teamtracker-cleaner-id', session.user.id);
+        setCleanerId(session.user.id);
+        navigate('/time-tracker');
+      }
     }
-    
-    loadFacilities();
-    loadUsers();
+  }, [session, navigate]);
+
+  // Single initializer for all data loading
+  useEffect(() => {
+    async function init() {
+      try {
+        // 1. Load saved cleaner ID from localStorage
+        const savedCleanerId = localStorage.getItem('cleanerId');
+        if (savedCleanerId) {
+          setCleanerId(savedCleanerId);
+        }
+
+        // 2. Load facilities
+        const facilitiesData = await getFacilities();
+        setFacilities(facilitiesData);
+
+        // 3. Load users
+        const usersData = await getUsers();
+        const mappedUsers = usersData.map((user: any) => ({
+          id: user.id,
+          username: user.email,
+          firstName: user.first_name || '',
+          lastName: user.last_name || '',
+          email: user.email,
+          phone: '',
+          active: true,
+        }));
+        setUsers(mappedUsers);
+
+        // 4. Load time entries if we have a cleaner ID
+        if (savedCleanerId) {
+          const supabaseEntries = await getTimeEntries(savedCleanerId);
+          const transformedEntries = supabaseEntries.map((entry: any) => {
+            const facility = facilitiesData.find(f => f.id === entry.facilityId);
+            return {
+              id: entry.id,
+              cleanerId: entry.cleanerId,
+              facility: facility?.name || 'Unknown Facility',
+              duration: entry.durationMinutes || 0,
+              notes: entry.notes || '',
+              startTime: new Date(entry.startISO),
+              endTime: new Date(entry.endISO),
+              createdAt: entry.createdAt ? new Date(entry.createdAt) : new Date(),
+            } as TimeEntry;
+          });
+          setTimeEntries(transformedEntries);
+        }
+
+      } catch (err) {
+        console.error('Dashboard init error:', err);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    init();
   }, []);
 
-  // Reload time entries when facilities are loaded
-  useEffect(() => {
-    if (facilities.length > 0 && cleanerId) {
-      loadTimeEntries(cleanerId);
-    }
-  }, [facilities, cleanerId]);
 
-  const loadFacilities = async () => {
-    try {
-      const facilitiesData = await getFacilities();
-      setFacilities(facilitiesData);
-    } catch (error) {
-      console.error('Error loading facilities:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load facilities",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const usersData = await getUsers();
-      setUsers(usersData);
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  };
-
-  const loadTimeEntries = async (id?: string) => {
-    setLoading(true);
-    try {
-      const supabaseEntries = await getTimeEntries(id);
-      
-      // Transform Supabase data to match TimeEntry interface
-      const transformedEntries = supabaseEntries.map((entry: any) => {
-        // Find facility name by ID
-        const facility = facilities.find(f => f.id === entry.facilityId);
-        
-        return {
-          id: entry.id,
-          cleanerId: entry.cleanerId,
-          facility: facility?.name || 'Unknown Facility',
-          duration: entry.durationMinutes || 0, // Duration is already in seconds
-          notes: entry.notes || '',
-          startTime: new Date(entry.startISO),
-          endTime: new Date(entry.endISO),
-          createdAt: entry.createdAt ? new Date(entry.createdAt) : new Date(),
-        } as TimeEntry;
-      });
-      
-      setTimeEntries(transformedEntries);
-    } catch (error) {
-      console.error('Error loading time entries:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load time entries",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogin = (id: string) => {
     setCleanerId(id);
@@ -161,40 +164,7 @@ export default function Index() {
     handleLogout();
   };
 
-  const handleManagerLogin = () => {
-    setShowManagerLogin(false);
-    setCleanerId('MANAGER'); // Set cleanerId to MANAGER for manager access
-    navigate('/manager');
-    toast({
-      title: "Manager Access Granted",
-      description: "Welcome to the Manager Dashboard",
-    });
-  };
 
-  const handleManagerLoginBack = () => {
-    setShowManagerLogin(false);
-  };
-
-  const handleViewChange = (view: 'timer' | 'manager' | 'calendar') => {
-    if (view === 'manager') {
-      const hasManagerAuth = localStorage.getItem('teamtracker-manager-auth') === 'true';
-      if (!hasManagerAuth) {
-        setShowManagerLogin(true);
-        return;
-      }
-    }
-    switch (view) {
-      case 'timer':
-        navigate('/timer');
-        break;
-      case 'manager':
-        navigate('/manager');
-        break;
-      case 'calendar':
-        navigate('/calendar');
-        break;
-    }
-  };
 
   const handleTimeEntry = async (entry: Omit<TimeEntry, 'id' | 'cleanerId' | 'createdAt'>) => {
     if (!cleanerId) return;
@@ -222,8 +192,22 @@ export default function Index() {
 
       if (result.success) {
         // Reload time entries to show the new entry
-        if (facilities.length > 0) {
-          await loadTimeEntries(cleanerId);
+        if (facilities.length > 0 && cleanerId) {
+          const supabaseEntries = await getTimeEntries(cleanerId);
+          const transformedEntries = supabaseEntries.map((entry: any) => {
+            const facility = facilities.find(f => f.id === entry.facilityId);
+            return {
+              id: entry.id,
+              cleanerId: entry.cleanerId,
+              facility: facility?.name || 'Unknown Facility',
+              duration: entry.durationMinutes || 0,
+              notes: entry.notes || '',
+              startTime: new Date(entry.startISO),
+              endTime: new Date(entry.endISO),
+              createdAt: entry.createdAt ? new Date(entry.createdAt) : new Date(),
+            } as TimeEntry;
+          });
+          setTimeEntries(transformedEntries);
         }
         const minutes = Math.round(entry.duration / 60);
         const seconds = entry.duration % 60;
@@ -269,31 +253,51 @@ export default function Index() {
 
 
 
-  // If not logged in, show login screen
-  if (!cleanerId) {
-    return <CleanerLogin onLogin={handleLogin} />;
+  // Show loading while session is being determined
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
-  // If showing manager login, show manager login screen
-  if (showManagerLogin) {
-    return <ManagerLogin onManagerLogin={handleManagerLogin} onBack={handleManagerLoginBack} />;
+  // If no session, show login
+  if (!session) {
+    return <Login onBack={() => navigate('/')} />;
+  }
+
+  // If session exists but no cleanerId set, show redirecting message
+  if (session?.user && !cleanerId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while data is being fetched
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
   }
 
   const cleanerEntries = getCleanerEntries();
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation 
-        currentView={currentView}
-        onViewChange={handleViewChange}
-        cleanerId={cleanerId}
-        totalHours={parseFloat(getTotalHours(cleanerEntries))}
-        onLogout={handleLogout}
-        onBackToFacilitySelection={handleBackToFacilitySelection}
-        onBackToLogin={handleBackToLogin}
-        users={users}
-      />
-      
       <div className="container mx-auto px-4 py-6 pt-20 pb-8">
         {currentView === 'timer' ? (
           // Enhanced Cleaner View
@@ -307,7 +311,7 @@ export default function Index() {
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Badge variant="secondary" className="text-base px-4 py-2 bg-gradient-primary/10 text-primary border-primary/20">
-                  👤 {getUserDisplayName(cleanerId)}
+                  👤 {getUserDisplayName(cleanerId || '')}
                 </Badge>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="hover:bg-destructive/10 hover:text-destructive transition-all duration-300">
                   <LogOut className="h-4 w-4 mr-2" />
@@ -341,7 +345,7 @@ export default function Index() {
           </div>
         ) : currentView === 'calendar' ? (
           // Calendar View
-          <CalendarView isManager={cleanerId === 'MANAGER'} currentUserId={cleanerId} />
+          <CalendarView isManager={cleanerId === 'MANAGER'} currentUserId={cleanerId || ''} />
         ) : (
           // Manager Interface - using the original working component
           <ManagerInterface onBack={() => navigate('/timer')} />
