@@ -105,49 +105,73 @@ export async function getUsers() {
 // }
 
 // Time entry functions
-export async function getTimeEntries(cleanerId?: string) {
-  let query = supabase.from('time_entries').select('*')
-  
-  if (cleanerId) {
-    query = query.eq('user_id', cleanerId)
-  }
-  
-  const { data, error } = await query.order('created_at', { ascending: false }).limit(100)
-
-  if (error) {
-    console.error('Error getting time entries:', error)
-    throw error
-  }
-
-  return data || []
-}
-
 export async function addTimeEntry(entry: {
   cleanerId: string;
   facilityId: string;
   startISO: string;
   endISO: string;
-  durationMinutes: number;
+  durationSeconds: number;
   notes?: string;
 }) {
-  const { data, error } = await supabase
-    .from('time_entries')
-    .insert([{
-      user_id: entry.cleanerId,
-      facility_id: entry.facilityId,
-      start_time: entry.startISO,
-      end_time: entry.endISO,
-      notes: entry.notes
-    }])
-    .select()
+  try {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .insert({
+        user_id: entry.cleanerId,
+        facility_id: entry.facilityId,
+        start_time: entry.startISO,
+        end_time: entry.endISO,
+        duration: entry.durationSeconds, // duration in seconds
+        notes: entry.notes || '', // notes field
+      })
+      .select();
 
-  if (error) {
-    console.error('Error adding time entry:', error)
-    throw error
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error adding time entry:', error);
+    throw error;
   }
-
-  return { success: true, data: data?.[0] }
 }
+
+export async function getTimeEntries() {
+  try {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .select(`
+        *,
+        facilities(name)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching time entries:', error);
+      throw error;
+    }
+
+    // Transform the data to match your frontend TimeEntry interface
+    return data.map(entry => ({
+      id: entry.id,
+      cleanerId: entry.user_id,
+      facility: entry.facilities?.name || 'Unknown Facility',
+      startTime: new Date(entry.start_time),
+      endTime: new Date(entry.end_time),
+      duration: entry.duration, // duration in seconds (matches your component expectation)
+      notes: entry.notes || '',
+      createdAt: new Date(entry.created_at),
+    }));
+
+  } catch (error) {
+    console.error('Error in getTimeEntries:', error);
+    throw error;
+  }
+}
+
+
 
 // Facility management functions
 export async function addFacility(facility: { id: string; name: string; nickname?: string }) {

@@ -15,7 +15,8 @@ import {
   getFacilities, 
   getUsers, 
   getTimeEntries, 
-  addTimeEntry 
+  addTimeEntry,
+  deleteTimeEntry  // Add this import
 } from '../services/scheduleService';
 
 interface TimeEntry {
@@ -139,7 +140,7 @@ export default function TimeTracker() {
         facilityId: facility.id,
         startISO: entry.startTime.toISOString(),
         endISO: entry.endTime.toISOString(),
-        durationMinutes: entry.duration,
+        durationSeconds: entry.duration, // duration in seconds (matches your component)
         notes: entry.notes,
       };
 
@@ -149,9 +150,11 @@ export default function TimeTracker() {
       const updatedEntries = await getTimeEntries();
       setTimeEntries(updatedEntries);
 
+      // Convert seconds to hours for display
+      const hours = (entry.duration / 3600).toFixed(1);
       toast({
         title: "Time entry added",
-        description: `Added ${entry.duration} hours for ${entry.facility}`,
+        description: `Added ${hours} hours for ${entry.facility}`,
       });
     } catch (error) {
       console.error('Error adding time entry:', error);
@@ -165,10 +168,9 @@ export default function TimeTracker() {
 
   const handleDeleteEntry = async (id: string) => {
     try {
-      // Note: You'll need to implement deleteTimeEntry in scheduleService
-      // await deleteTimeEntry(id);
+      await deleteTimeEntry(id);
       
-      // For now, just remove from local state
+      // Remove from local state
       setTimeEntries(prev => prev.filter(entry => entry.id !== id));
       
       toast({

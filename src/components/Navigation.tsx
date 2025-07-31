@@ -1,13 +1,18 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
+import { useSession } from '@/hooks/useSession'; // Add this import
 
 export default function Navigation() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { session } = useSession(); // Add this to get user session
 
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = "/login";
   };
+
+  // Check if user is a manager
+  const isManager = session?.role === 'manager';
 
   return (
     <header className="bg-white shadow-md">
@@ -23,7 +28,10 @@ export default function Navigation() {
         {/* Desktop nav */}
         <nav className="hidden md:flex space-x-6">
           <NavLink to="/calendar" className="hover:underline">Calendar</NavLink>
-          <NavLink to="/manager-dashboard" className="hover:underline">Dashboard</NavLink>
+          {/* Only show Dashboard link to managers */}
+          {isManager && (
+            <NavLink to="/manager-dashboard" className="hover:underline">Dashboard</NavLink>
+          )}
           <NavLink to="/time-tracker" className="hover:underline">Time Tracker</NavLink>
           <button 
             onClick={handleLogout}
@@ -47,15 +55,18 @@ export default function Navigation() {
                 Calendar
               </NavLink>
             </li>
-            <li>
-              <NavLink
-                to="/manager-dashboard"
-                className="block py-2"
-                onClick={() => setMobileOpen(false)}
-              >
-                Dashboard
-              </NavLink>
-            </li>
+            {/* Only show Dashboard link to managers in mobile menu too */}
+            {isManager && (
+              <li>
+                <NavLink
+                  to="/manager-dashboard"
+                  className="block py-2"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  Dashboard
+                </NavLink>
+              </li>
+            )}
             <li>
               <NavLink
                 to="/time-tracker"

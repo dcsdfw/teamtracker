@@ -1,15 +1,63 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CalendarView from '@/components/CalendarView';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, FileText, Trash2 } from 'lucide-react';
 import { addTestScheduleRule, getScheduleRules } from '../testScheduleRule';
 import { useToast } from '@/hooks/use-toast';
+import { useSession } from '@/hooks/useSession';
 import { deleteAllScheduleRules } from '@/services/scheduleService';
 import { refetchCalendar } from '@/components/CalendarView';
 
 export default function ManagerDashboard() {
+  const navigate = useNavigate();
+  const { session, loading: sessionLoading } = useSession();
   const { toast } = useToast();
+
+  // Protect manager dashboard - only allow managers
+  useEffect(() => {
+    if (!sessionLoading && session) {
+      if (session.role !== 'manager') {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to access the manager dashboard.",
+          variant: "destructive",
+        });
+        navigate('/time-tracker'); // Redirect non-managers to time tracker
+        return;
+      }
+    }
+  }, [session, sessionLoading, navigate, toast]);
+
+  // Show loading while session is being determined
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no session, redirect to login
+  if (!session) {
+    navigate('/login');
+    return <div>Redirecting to login...</div>;
+  }
+
+  // If not a manager, the useEffect above will handle the redirect
+  if (session.role !== 'manager') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
