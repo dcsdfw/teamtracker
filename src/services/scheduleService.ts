@@ -55,16 +55,30 @@ export async function addScheduleRule(rule: {
 }
 
 export async function getScheduleRules() {
-  const { data, error } = await supabase
-    .from('schedule_rules')
-    .select('*')
+  try {
+    console.log('🔍 Fetching schedule rules...');
+    
+    const { data, error } = await supabase
+      .from('schedule_rules')
+      .select(`
+        *,
+        facilities (
+          name
+        )
+      `)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error getting schedule rules:', error)
-    throw error
+    if (error) {
+      console.error('❌ Error fetching schedule rules:', error);
+      throw error;
+    }
+
+    console.log('✅ Schedule rules fetched:', data);
+    return data || [];
+  } catch (error) {
+    console.error('💥 Error in getScheduleRules:', error);
+    throw error;
   }
-
-  return data || []
 }
 
 // Additional functions for ScheduleManager compatibility
@@ -304,4 +318,4 @@ export async function getMonthlyTimeEntries(userId: string, month: string) {
     ...r,
     durationH: (new Date(r.end_time).getTime() - new Date(r.start_time).getTime())/3600000
   }));
-} 
+}

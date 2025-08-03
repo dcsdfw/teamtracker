@@ -24,11 +24,15 @@ export const Login: React.FC<LoginProps> = ({ onBack }) => {
     setIsLoading(true);
     
     try {
+      console.log('🔄 Starting auth...');
+      
       // Sign in with Supabase - using correct destructuring
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
+      
+      console.log('🔐 Auth response:', { data, error });
       
       if (error) {
         console.error('Auth error:', error);
@@ -43,30 +47,10 @@ export const Login: React.FC<LoginProps> = ({ onBack }) => {
         return;
       }
 
-      // Get user profile to determine role
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
-
-      if (profileError) {
-        console.error('Profile fetch error:', profileError);
-        setError('Could not load your profile');
-        setIsLoading(false);
-        return;
-      }
-
-      // ✅ Navigate directly after successful login
-      if (profile.role === 'manager') {
-        localStorage.setItem('teamtracker-manager-auth', 'true');
-        console.log("✅ Login OK, redirecting to:", '/manager-dashboard');
-        navigate('/manager-dashboard');
-      } else {
-        localStorage.setItem('teamtracker-cleaner-id', data.user.id);
-        console.log("✅ Login OK, redirecting to:", '/time-tracker');
-        navigate('/time-tracker');
-      }
+      // TEMPORARY: Skip profile check and go straight to time tracker
+      console.log('✅ Auth successful, skipping profile check');
+      localStorage.setItem('teamtracker-cleaner-id', data.user.id);
+      navigate('/time-tracker');
       
     } catch (err) {
       console.error('Login error:', err);
@@ -183,4 +167,4 @@ export const Login: React.FC<LoginProps> = ({ onBack }) => {
       </div>
     </div>
   );
-}; 
+};

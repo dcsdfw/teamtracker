@@ -11,10 +11,11 @@ import { Calendar, Plus, Edit, Trash2, Clock, Building2, Users, RefreshCw, X, Ch
 import { useToast } from '@/hooks/use-toast'
 import { refetchCalendar } from './CalendarView'
 import { 
-  addScheduleRule, 
-  getFacilities, 
-  getUsers
-  // getSchedule, addScheduleEntry, updateScheduleEntry, deleteScheduleEntry - DEPRECATED
+  addScheduleRule,
+  getFacilities,
+  getUsers,
+  getScheduleRules,
+  deleteScheduleRule
 } from '../services/scheduleService'
 
 interface ScheduleEntry {
