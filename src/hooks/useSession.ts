@@ -12,42 +12,51 @@ export function useSession() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true; // Prevent state updates if component unmounted
+    let mounted = true;
+    console.log('🚀 useSession effect started');
 
     // Get initial session
     const getInitialSession = async () => {
       try {
+        console.log('🔄 Getting initial session...');
         setLoading(true);
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
         
-        if (!mounted) return; // Component unmounted, don't update state
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log('📡 Initial session response:', currentSession?.user?.id || 'no user');
+        
+        if (!mounted) {
+          console.log('⚠️ Component unmounted during initial session fetch');
+          return;
+        }
         
         if (currentSession?.user) {
-          // Get user profile to determine role
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', currentSession.user.id)
-            .single();
+          console.log('👤 User found, getting role from metadata...');
+          
+          // Get role from user metadata instead of database query
+          const role = currentSession.user.user_metadata?.role || 'cleaner';
+          console.log('📋 Role from metadata:', role);
 
           if (mounted) {
             setSession({
               user: currentSession.user,
-              role: profile?.role
+              role: role
             });
+            console.log('✅ Session set with role:', role);
           }
         } else {
+          console.log('❌ No user session found');
           if (mounted) {
             setSession(null);
           }
         }
       } catch (error) {
-        console.error('Error getting session:', error);
+        console.error('💥 Error getting initial session:', error);
         if (mounted) {
           setSession(null);
         }
       } finally {
         if (mounted) {
+          console.log('🏁 Initial session loading complete');
           setLoading(false);
         }
       }
@@ -58,45 +67,49 @@ export function useSession() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log('Auth state changed:', event, currentSession?.user?.id);
+        console.log('🔄 Auth state changed:', event, currentSession?.user?.id || 'no user');
         
-        if (!mounted) return; // Component unmounted, don't update state
+        if (!mounted) {
+          console.log('⚠️ Component unmounted during auth state change');
+          return;
+        }
         
-        setLoading(true); // Set loading true when auth changes
+        setLoading(true);
         
         try {
           if (currentSession?.user) {
-            // Get user profile to determine role
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', currentSession.user.id)
-              .single();
+            console.log('👤 Auth change: User found, getting role from metadata...');
+            
+            // Get role from user metadata instead of database query
+            const role = currentSession.user.user_metadata?.role || 'cleaner';
+            console.log('📋 Auth change role from metadata:', role);
 
             if (mounted) {
               setSession({
                 user: currentSession.user,
-                role: profile?.role || 'cleaner' // Default role if profile fetch fails
+                role: role
               });
+              console.log('✅ Auth change: Session updated with role:', role);
             }
           } else {
+            console.log('❌ Auth change: No user');
             if (mounted) {
               setSession(null);
             }
           }
         } catch (error) {
-          console.error('Error getting profile on auth change:', error);
+          console.error('💥 Error on auth change:', error);
           if (mounted && currentSession?.user) {
-            // Still set session even if profile fetch fails
             setSession({
               user: currentSession.user,
-              role: 'cleaner' // Default role
+              role: 'cleaner'
             });
           } else if (mounted) {
             setSession(null);
           }
         } finally {
           if (mounted) {
+            console.log('🏁 Auth change loading complete');
             setLoading(false);
           }
         }
@@ -104,10 +117,13 @@ export function useSession() {
     );
 
     return () => {
-      mounted = false; // Prevent state updates after cleanup
+      console.log('🧹 useSession cleanup');
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
+
+  console.log('🔍 useSession current state:', { loading, hasUser: !!session?.user, role: session?.role });
 
   return { session, loading };
 }

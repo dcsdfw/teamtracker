@@ -13,20 +13,18 @@ import {
   getFacilities, 
   getUsers, 
   getTimeEntries, 
+  getScheduleRules,  // ← ADD THIS IMPORT
   addFacility, 
   updateFacility, 
   addUser, 
   updateUser, 
   deleteTimeEntry,
   getExistingUserIds
-  // deleteAllScheduleEntries - DEPRECATED
 } from '../services/scheduleService'
 
 interface ManagerInterfaceProps {
   onBack: () => void
 }
-
-
 
 interface TimeEntry {
   id: string
@@ -37,6 +35,17 @@ interface TimeEntry {
   durationMinutes: number
   notes?: string
   createdAt: Date
+}
+
+interface ScheduleRule {
+  id: string
+  name: string
+  facility_id: string
+  rrule: string
+  color?: string
+  notes?: string
+  created_at: string
+  facilities?: { name: string }
 }
 
 export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
@@ -58,7 +67,9 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserPhone, setNewUserPhone] = useState('')
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
+  const [scheduleRules, setScheduleRules] = useState<ScheduleRule[]>([])  // ← ADD THIS STATE
   const [loadingEntries, setLoadingEntries] = useState(false)
+  const [loadingSchedules, setLoadingSchedules] = useState(false)  // ← ADD THIS STATE
   const [listenerActive, setListenerActive] = useState(false)
   const [users, setUsers] = useState<Array<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean }>>([])
   const [editingUser, setEditingUser] = useState<{ id: string; username: string; firstName: string; lastName: string; email: string; phone: string; active: boolean } | null>(null)
@@ -81,6 +92,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       loadFacilities(),
       loadUsers(),
       loadTimeEntries(),
+      loadScheduleRules(),  // ← ADD THIS
     ])
       .catch((err) => {
         console.error('Dashboard init error:', err);
@@ -149,6 +161,26 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   }
 
+  // ← ADD THIS FUNCTION
+  const loadScheduleRules = async () => {
+    try {
+      setLoadingSchedules(true)
+      console.log('Loading schedule rules...')
+      const rules = await getScheduleRules()
+      console.log('Schedule rules loaded:', rules)
+      setScheduleRules(rules)
+    } catch (error) {
+      console.error('Error loading schedule rules:', error)
+      toast({
+        title: "Error",
+        description: `Error loading schedule rules: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingSchedules(false)
+    }
+  }
+
   const refreshDashboard = async () => {
     setLoading(true);
     setError(null);
@@ -157,6 +189,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
         loadFacilities(),
         loadUsers(),
         loadTimeEntries(),
+        loadScheduleRules(),  // ← ADD THIS
       ]);
     } catch (err) {
       console.error('Dashboard refresh error:', err);
@@ -165,12 +198,6 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       setLoading(false);
     }
   };
-
-
-
-
-
-
 
   const handleAddFacility = async () => {
     if (!newFacilityId.trim() || !newFacilityName.trim()) {
@@ -393,10 +420,6 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     }
   };
 
-
-
-
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -476,6 +499,74 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
             <CardContent>
               <ScheduleManager selectedDate={selectedDate} />
               
+              {/* ← ADD SCHEDULE ENTRIES LIST HERE */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-foreground flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Schedule Entries ({scheduleRules.length})
+                  </h3>
+                  <Button 
+                    onClick={loadScheduleRules}
+                    disabled={loadingSchedules}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {loadingSchedules ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Refresh
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                {loadingSchedules ? (
+                  <div className="text-center py-4">
+                    <RefreshCw className="h-6 w-6 mx-auto mb-2 animate-spin text-primary" />
+                    <p className="text-muted-foreground text-sm">Loading schedule entries...</p>
+                  </div>
+                ) : scheduleRules.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No schedule entries for this date</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {scheduleRules.map(rule => (
+                      <div key={rule.id} className="p-3 bg-background/50 rounded-lg border border-border/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: rule.color || '#3b82f6' }}
+                            ></div>
+                            <span className="font-medium text-foreground">{rule.name}</span>
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            Recurring
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Building2 className="h-3 w-3" />
+                          <span>{rule.facilities?.name || 'Unknown Facility'}</span>
+                        </div>
+                        {rule.notes && (
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            <FileText className="h-3 w-3 inline mr-1" />
+                            {rule.notes}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -1046,4 +1137,4 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
       </div>
     </div>
   )
-} 
+}

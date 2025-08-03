@@ -60,12 +60,7 @@ export async function getScheduleRules() {
     
     const { data, error } = await supabase
       .from('schedule_rules')
-      .select(`
-        *,
-        facilities (
-          name
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -74,13 +69,26 @@ export async function getScheduleRules() {
     }
 
     console.log('✅ Schedule rules fetched:', data);
+    
+    // Get facility names separately to avoid join issues
+    if (data && data.length > 0) {
+      const facilitiesData = await getFacilities();
+      
+      // Add facility names to schedule rules
+      const rulesWithFacilities = data.map(rule => ({
+        ...rule,
+        facilities: facilitiesData.find(f => f.id === rule.facility_id)
+      }));
+      
+      return rulesWithFacilities;
+    }
+    
     return data || [];
   } catch (error) {
     console.error('💥 Error in getScheduleRules:', error);
     throw error;
   }
 }
-
 // Additional functions for ScheduleManager compatibility
 export async function getFacilities() {
   const { data, error } = await supabase
@@ -167,17 +175,18 @@ export async function getTimeEntries() {
       throw error;
     }
 
-    // Transform the data to match your frontend TimeEntry interface
-    return data.map(entry => ({
-      id: entry.id,
-      cleanerId: entry.user_id,
-      facility: entry.facilities?.name || 'Unknown Facility',
-      startTime: new Date(entry.start_time),
-      endTime: new Date(entry.end_time),
-      duration: entry.duration, // duration in seconds (matches your component expectation)
-      notes: entry.notes || '',
-      createdAt: new Date(entry.created_at),
-    }));
+   
+   // Transform the data to match your frontend TimeEntry interface
+return data.map(entry => ({
+  id: entry.id,
+  cleanerId: entry.user_id,
+  facilityId: entry.facility_id,  // ← Keep as facilityId, not facility name
+  startISO: entry.start_time,     // ← Keep as ISO string
+  endISO: entry.end_time,         // ← Keep as ISO string
+  durationMinutes: entry.duration, // ← Rename from duration to durationMinutes
+  notes: entry.notes || '',
+  createdAt: new Date(entry.created_at),
+}));
 
   } catch (error) {
     console.error('Error in getTimeEntries:', error);
