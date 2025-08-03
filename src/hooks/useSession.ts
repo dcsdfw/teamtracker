@@ -12,10 +12,15 @@ export function useSession() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true; // Prevent state updates if component unmounted
+
     // Get initial session
     const getInitialSession = async () => {
       try {
+        setLoading(true);
         const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (!mounted) return; // Component unmounted, don't update state
         
         if (currentSession?.user) {
           // Get user profile to determine role
@@ -25,18 +30,26 @@ export function useSession() {
             .eq('id', currentSession.user.id)
             .single();
 
-          setSession({
-            user: currentSession.user,
-            role: profile?.role
-          });
+          if (mounted) {
+            setSession({
+              user: currentSession.user,
+              role: profile?.role
+            });
+          }
         } else {
-          setSession(null);
+          if (mounted) {
+            setSession(null);
+          }
         }
       } catch (error) {
         console.error('Error getting session:', error);
-        setSession(null);
+        if (mounted) {
+          setSession(null);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -45,8 +58,14 @@ export function useSession() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (currentSession?.user) {
-          try {
+        console.log('Auth state changed:', event, currentSession?.user?.id);
+        
+        if (!mounted) return; // Component unmounted, don't update state
+        
+        setLoading(true); // Set loading true when auth changes
+        
+        try {
+          if (currentSession?.user) {
             // Get user profile to determine role
             const { data: profile } = await supabase
               .from('profiles')
@@ -54,26 +73,41 @@ export function useSession() {
               .eq('id', currentSession.user.id)
               .single();
 
-            setSession({
-              user: currentSession.user,
-              role: profile?.role
-            });
-          } catch (error) {
-            console.error('Error getting profile:', error);
-            setSession({
-              user: currentSession.user,
-              role: undefined
-            });
+            if (mounted) {
+              setSession({
+                user: currentSession.user,
+                role: profile?.role || 'cleaner' // Default role if profile fetch fails
+              });
+            }
+          } else {
+            if (mounted) {
+              setSession(null);
+            }
           }
-        } else {
-          setSession(null);
+        } catch (error) {
+          console.error('Error getting profile on auth change:', error);
+          if (mounted && currentSession?.user) {
+            // Still set session even if profile fetch fails
+            setSession({
+              user: currentSession.user,
+              role: 'cleaner' // Default role
+            });
+          } else if (mounted) {
+            setSession(null);
+          }
+        } finally {
+          if (mounted) {
+            setLoading(false);
+          }
         }
-        setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false; // Prevent state updates after cleanup
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { session, loading };
-} 
+}
