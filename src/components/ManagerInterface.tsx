@@ -248,20 +248,20 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   };
 
   const handleAddFacility = async () => {
-    if (!newFacilityId.trim() || !newFacilityName.trim()) {
+    if (!newFacilityName.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please fill in both Facility ID and Facility Name",
+        description: "Please fill in the Facility Name",
         variant: "destructive",
       })
       return
     }
 
-    // Check if facility ID already exists
-    if (facilities.some(f => f.id === newFacilityId.trim())) {
+    // Check if facility name already exists
+    if (facilities.some(f => f.name.toLowerCase() === newFacilityName.trim().toLowerCase())) {
       toast({
         title: "Duplicate Facility",
-        description: "Facility ID already exists. Please use a different ID.",
+        description: "A facility with this name already exists. Please use a different name.",
         variant: "destructive",
       })
       return
@@ -271,7 +271,6 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
 
     try {
       await addFacility({
-        id: newFacilityId.trim(),
         name: newFacilityName.trim(),
         nickname: newFacilityNickname.trim() || undefined
       })
@@ -284,7 +283,6 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
         description: "Facility added successfully!",
       })
       setShowAddFacility(false)
-      setNewFacilityId('')
       setNewFacilityName('')
       setNewFacilityNickname('')
     } catch (error) {
@@ -401,10 +399,10 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const handleEditFacility = async () => {
     if (!editingFacility) return;
 
-    if (!editFacilityId.trim() || !editFacilityName.trim()) {
+    if (!editFacilityName.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please fill in both Facility ID and Facility Name",
+        description: "Please fill in the Facility Name",
         variant: "destructive",
       });
       return;
@@ -1178,14 +1176,14 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                   <h3 className="font-semibold text-foreground">Add New Facility</h3>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="newFacilityId">Facility ID</Label>
+                    <Label htmlFor="newFacilityId">Facility ID (Read-only)</Label>
                     <Input
                       type="text"
                       id="newFacilityId"
-                      value={newFacilityId}
-                      onChange={(e) => setNewFacilityId(e.target.value)}
-                      placeholder="e.g., office-building-1"
+                      value="Will be generated automatically"
+                      placeholder="Auto-generated UUID"
                       className="bg-background/50"
+                      disabled
                     />
                   </div>
 
@@ -1216,6 +1214,8 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                     </p>
                   </div>
 
+
+
                   <div className="flex gap-2">
                     <Button 
                       onClick={handleAddFacility} 
@@ -1237,7 +1237,6 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                     <Button 
                       onClick={() => {
                         setShowAddFacility(false)
-                        setNewFacilityId('')
                         setNewFacilityName('')
                         setNewFacilityNickname('')
                       }}
@@ -1289,7 +1288,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                     <h3 className="font-semibold text-foreground">Edit Facility</h3>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="editFacilityId">Facility ID</Label>
+                      <Label htmlFor="editFacilityId">Facility ID (Read-only)</Label>
                       <Input
                         type="text"
                         id="editFacilityId"
@@ -1297,6 +1296,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         onChange={(e) => setEditFacilityId(e.target.value)}
                         placeholder="e.g., office-building-1"
                         className="bg-background/50"
+                        disabled
                       />
                     </div>
 

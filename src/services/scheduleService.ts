@@ -131,7 +131,12 @@ export async function getFacilities() {
     .from('facilities')        // ← matches new table
     .select('*');
   if (error) throw error;
-  return data!;
+  
+  // Map shortname to nickname for frontend compatibility
+  return data!.map(facility => ({
+    ...facility,
+    nickname: facility.shortname
+  }));
 }
 
 export async function getUsers() {
@@ -233,24 +238,41 @@ return data.map(entry => ({
 
 
 // Facility management functions
-export async function addFacility(facility: { id: string; name: string; nickname?: string }) {
-  const { data, error } = await supabase
-    .from('facilities')
-    .insert([facility])
-    .select()
+export async function addFacility(facility: { name: string; nickname?: string }) {
+  try {
+    console.log('Adding facility:', facility);
+    
+    const { data, error } = await supabase
+      .from('facilities')
+      .insert([{
+        name: facility.name,
+        shortname: facility.nickname || facility.name.substring(0, 3).toUpperCase()
+      }])
+      .select();
 
-  if (error) {
-    console.error('Error adding facility:', error)
-    throw error
+    if (error) {
+      console.error('Supabase error adding facility:', error);
+      throw error;
+    }
+
+    return data?.[0];
+  } catch (error) {
+    console.error('Error adding facility:', error);
+    throw error;
   }
-
-  return data?.[0]
 }
 
 export async function updateFacility(facilityId: string, updates: { name?: string; nickname?: string }) {
+  // Convert nickname to shortname for database
+  const dbUpdates: any = { ...updates };
+  if (updates.nickname !== undefined) {
+    dbUpdates.shortname = updates.nickname;
+    delete dbUpdates.nickname;
+  }
+  
   const { data, error } = await supabase
     .from('facilities')
-    .update(updates)
+    .update(dbUpdates)
     .eq('id', facilityId)
     .select()
 
