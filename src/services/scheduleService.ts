@@ -54,6 +54,42 @@ export async function addScheduleRule(rule: {
   return data![0];
 }
 
+export async function updateScheduleRule(ruleId: string, updates: {
+  name?: string;
+  facilityId?: string;
+  rrule?: string;
+  color?: string;
+  notes?: string;
+}) {
+  try {
+    console.log('🔄 Updating schedule rule:', ruleId, updates);
+    
+    const payload: any = {};
+    if (updates.name) payload.name = updates.name;
+    if (updates.facilityId) payload.facility_id = updates.facilityId;
+    if (updates.rrule) payload.rrule = updates.rrule;
+    if (updates.color) payload.color = updates.color;
+    if (updates.notes) payload.notes = updates.notes;
+    
+    const { data, error } = await supabase
+      .from('schedule_rules')
+      .update(payload)
+      .eq('id', ruleId)
+      .select();
+
+    if (error) {
+      console.error('❌ Error updating schedule rule:', error);
+      throw error;
+    }
+
+    console.log('✅ Schedule rule updated successfully:', data);
+    return data?.[0];
+  } catch (error) {
+    console.error('💥 Error in updateScheduleRule:', error);
+    throw error;
+  }
+}
+
 export async function getScheduleRules() {
   try {
     console.log('🔍 Fetching schedule rules...');

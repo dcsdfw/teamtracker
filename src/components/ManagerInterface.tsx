@@ -13,13 +13,15 @@ import {
   getFacilities, 
   getUsers, 
   getTimeEntries, 
-  getScheduleRules,  // ← ADD THIS IMPORT
+  getScheduleRules,
   addFacility, 
   updateFacility, 
   addUser, 
   updateUser, 
   deleteTimeEntry,
-  getExistingUserIds
+  getExistingUserIds,
+  updateScheduleRule,
+  deleteScheduleRule
 } from '../services/scheduleService'
 
 interface ManagerInterfaceProps {
@@ -84,7 +86,53 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
   const [editFacilityName, setEditFacilityName] = useState('')
   const [editFacilityNickname, setEditFacilityNickname] = useState('')
 
+  // Schedule rule editing state
+  const [editingScheduleRule, setEditingScheduleRule] = useState<ScheduleRule | null>(null)
+  const [editRuleName, setEditRuleName] = useState('')
+  const [editRuleFacilityId, setEditRuleFacilityId] = useState('')
+  const [editRuleColor, setEditRuleColor] = useState('')
+  const [editRuleNotes, setEditRuleNotes] = useState('')
+  const [editRuleRrule, setEditRuleRrule] = useState('')
+  const [editRuleFrequency, setEditRuleFrequency] = useState('WEEKLY')
+  const [editRuleDays, setEditRuleDays] = useState<string[]>([])
+  const [editRuleHour, setEditRuleHour] = useState('9')
+  const [editRuleMinute, setEditRuleMinute] = useState('0')
+  const [editRuleUntil, setEditRuleUntil] = useState('')
+
   const { toast } = useToast()
+
+  // Helper functions to parse and generate RRULE
+  const parseRrule = (rrule: string) => {
+    const parts = rrule.split(';')
+    const parsed: any = {}
+    
+    parts.forEach(part => {
+      const [key, value] = part.split('=')
+      if (key === 'FREQ') parsed.frequency = value
+      if (key === 'BYDAY') parsed.days = value.split(',')
+      if (key === 'BYHOUR') parsed.hour = value
+      if (key === 'BYMINUTE') parsed.minute = value
+      if (key === 'UNTIL') parsed.until = value
+    })
+    
+    return parsed
+  }
+
+  const generateRrule = (frequency: string, days: string[], hour: string, minute: string, until: string) => {
+    let rrule = `FREQ=${frequency}`
+    
+    if (days.length > 0) {
+      rrule += `;BYDAY=${days.join(',')}`
+    }
+    
+    rrule += `;BYHOUR=${hour};BYMINUTE=${minute}`
+    
+    if (until) {
+      rrule += `;UNTIL=${until}`
+    }
+    
+    return rrule
+  }
 
   useEffect(() => {
     // Run your data fetches in parallel, then hide spinner
@@ -403,6 +451,104 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
     setEditFacilityNickname('');
   };
 
+  // Schedule rule editing handlers
+  const startEditScheduleRule = (rule: ScheduleRule) => {
+    setEditingScheduleRule(rule);
+    setEditRuleName(rule.name);
+    setEditRuleFacilityId(rule.facility_id);
+    setEditRuleColor(rule.color || '');
+    setEditRuleNotes(rule.notes || '');
+    setEditRuleRrule(rule.rrule);
+    
+    // Parse the existing RRULE to populate the form fields
+    const parsed = parseRrule(rule.rrule);
+    setEditRuleFrequency(parsed.frequency || 'WEEKLY');
+    setEditRuleDays(parsed.days || []);
+    setEditRuleHour(parsed.hour || '9');
+    setEditRuleMinute(parsed.minute || '0');
+    setEditRuleUntil(parsed.until || '');
+  };
+
+  const cancelEditScheduleRule = () => {
+    setEditingScheduleRule(null);
+    setEditRuleName('');
+    setEditRuleFacilityId('');
+    setEditRuleColor('');
+    setEditRuleNotes('');
+    setEditRuleRrule('');
+    setEditRuleFrequency('WEEKLY');
+    setEditRuleDays([]);
+    setEditRuleHour('9');
+    setEditRuleMinute('0');
+    setEditRuleUntil('');
+  };
+
+  const handleEditScheduleRule = async () => {
+    if (!editingScheduleRule || !editRuleName.trim() || !editRuleFacilityId.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in Name and Facility",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Generate the RRULE from the form fields
+      const generatedRrule = generateRrule(
+        editRuleFrequency,
+        editRuleDays,
+        editRuleHour,
+        editRuleMinute,
+        editRuleUntil
+      );
+
+      await updateScheduleRule(editingScheduleRule.id, {
+        name: editRuleName.trim(),
+        facilityId: editRuleFacilityId.trim(),
+        rrule: generatedRrule,
+        color: editRuleColor.trim() || undefined,
+        notes: editRuleNotes.trim() || undefined
+      });
+      
+      toast({
+        title: "Schedule Rule Updated Successfully",
+        description: `${editRuleName} has been updated.`,
+      });
+      
+      await loadScheduleRules(); // Reload schedule rules to reflect changes
+      cancelEditScheduleRule();
+    } catch (error) {
+      console.error('Error updating schedule rule:', error);
+      toast({
+        title: "Error",
+        description: `Error updating schedule rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteScheduleRule = async (ruleId: string, ruleName: string) => {
+    try {
+      await deleteScheduleRule(ruleId);
+      toast({
+        title: "Schedule Rule Deleted",
+        description: `Schedule rule "${ruleName}" has been removed.`,
+      });
+      await loadScheduleRules(); // Reload schedule rules to reflect changes
+    } catch (error) {
+      console.error('Error deleting schedule rule:', error);
+      toast({
+        title: "Error",
+        description: `Failed to delete schedule rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteTimeEntry = async (entryId: string, facilityName: string) => {
     try {
       await deleteTimeEntry(entryId);
@@ -539,7 +685,7 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                 ) : (
                   <div className="space-y-3">
                     {scheduleRules.map(rule => (
-                      <div key={rule.id} className="p-3 bg-background/50 rounded-lg border border-border/50">
+                      <div key={rule.id} className="p-3 bg-background/50 rounded-lg border border-border/50 group">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <div 
@@ -548,9 +694,29 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                             ></div>
                             <span className="font-medium text-foreground">{rule.name}</span>
                           </div>
-                          <Badge variant="outline" className="text-xs">
-                            Recurring
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              Recurring
+                            </Badge>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startEditScheduleRule(rule)}
+                                className="h-6 w-6 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteScheduleRule(rule.id, rule.name)}
+                                className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Building2 className="h-3 w-3" />
@@ -564,6 +730,189 @@ export const ManagerInterface = ({ onBack }: ManagerInterfaceProps) => {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Edit Schedule Rule Form */}
+                {editingScheduleRule && (
+                  <div className="mt-6 space-y-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                    <h3 className="font-semibold text-foreground">Edit Schedule Rule: {editingScheduleRule.name}</h3>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="editRuleName">Rule Name</Label>
+                      <Input
+                        type="text"
+                        id="editRuleName"
+                        value={editRuleName}
+                        onChange={(e) => setEditRuleName(e.target.value)}
+                        placeholder="e.g., Morning Cleaning"
+                        className="bg-background/50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editRuleFacility">Facility</Label>
+                      <Select value={editRuleFacilityId} onValueChange={setEditRuleFacilityId}>
+                        <SelectTrigger className="bg-background/50">
+                          <SelectValue placeholder="Select a facility..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {facilities.map(facility => (
+                            <SelectItem key={facility.id} value={facility.id}>
+                              {facility.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Frequency</Label>
+                        <Select value={editRuleFrequency} onValueChange={setEditRuleFrequency}>
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="DAILY">Daily</SelectItem>
+                            <SelectItem value="WEEKLY">Weekly</SelectItem>
+                            <SelectItem value="MONTHLY">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {editRuleFrequency === 'WEEKLY' && (
+                        <div className="space-y-2">
+                          <Label>Days of Week</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { value: 'MO', label: 'Mon' },
+                              { value: 'TU', label: 'Tue' },
+                              { value: 'WE', label: 'Wed' },
+                              { value: 'TH', label: 'Thu' },
+                              { value: 'FR', label: 'Fri' },
+                              { value: 'SA', label: 'Sat' },
+                              { value: 'SU', label: 'Sun' }
+                            ].map(day => (
+                              <Button
+                                key={day.value}
+                                type="button"
+                                variant={editRuleDays.includes(day.value) ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => {
+                                  if (editRuleDays.includes(day.value)) {
+                                    setEditRuleDays(editRuleDays.filter(d => d !== day.value));
+                                  } else {
+                                    setEditRuleDays([...editRuleDays, day.value]);
+                                  }
+                                }}
+                                className="h-8 px-3"
+                              >
+                                {day.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Time</Label>
+                          <div className="flex gap-2">
+                            <Select value={editRuleHour} onValueChange={setEditRuleHour}>
+                              <SelectTrigger className="bg-background/50">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 24 }, (_, i) => (
+                                  <SelectItem key={i} value={i.toString()}>
+                                    {i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select value={editRuleMinute} onValueChange={setEditRuleMinute}>
+                              <SelectTrigger className="bg-background/50">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">00</SelectItem>
+                                <SelectItem value="15">15</SelectItem>
+                                <SelectItem value="30">30</SelectItem>
+                                <SelectItem value="45">45</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>End Date (Optional)</Label>
+                          <Input
+                            type="date"
+                            value={editRuleUntil ? editRuleUntil.split('T')[0] : ''}
+                            onChange={(e) => {
+                              const date = e.target.value;
+                              if (date) {
+                                setEditRuleUntil(`${date}T235959Z`);
+                              } else {
+                                setEditRuleUntil('');
+                              }
+                            }}
+                            className="bg-background/50"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editRuleColor">Color (Optional)</Label>
+                      <Input
+                        type="color"
+                        id="editRuleColor"
+                        value={editRuleColor}
+                        onChange={(e) => setEditRuleColor(e.target.value)}
+                        className="bg-background/50 w-20 h-10"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editRuleNotes">Notes (Optional)</Label>
+                      <Input
+                        type="text"
+                        id="editRuleNotes"
+                        value={editRuleNotes}
+                        onChange={(e) => setEditRuleNotes(e.target.value)}
+                        placeholder="e.g., Special instructions for this schedule"
+                        className="bg-background/50"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={handleEditScheduleRule} 
+                        disabled={isLoading}
+                        className="flex-1 bg-gradient-primary hover:bg-gradient-primary/90 text-white transition-all duration-300"
+                      >
+                        {isLoading ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Update Rule
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={cancelEditScheduleRule}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
